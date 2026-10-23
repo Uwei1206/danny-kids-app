@@ -943,15 +943,34 @@ function setupShareButton(shareBtn, file, status){
     return;
   }
   shareBtn.style.display = "block";
+
+  // 某些Android瀏覽器/手機會對特定檔名或檔案類型回傳 NotAllowedError，
+  // 所以失敗時依序換幾種方式重試：①原檔名 ②純英文檔名 ③通用檔案類型。
+  const ext = (file.name.match(/\.[^.]+$/) || [".xlsx"])[0];
+  const variants = [
+    () => file,
+    () => new File([file], "document_" + Date.now() + ext, {type: file.type}),
+    () => new File([file], "document_" + Date.now() + ext, {type: "application/octet-stream"})
+  ];
+
   shareBtn.onclick = async ()=>{
-    try{
-      await navigator.share({files:[file], title:file.name});
-    }catch(err){
-      if(err && err.name === "AbortError") return;
-      status.style.display = "block";
-      status.className = "error";
-      status.textContent = "分享失敗（" + ((err && err.name) || "未知錯誤") + "）：" + ((err && err.message) || "") + "。檔案已下載到手機的「下載」資料夾，可以直接從那裡傳送。";
+    const errors = [];
+    for(const make of variants){
+      let f;
+      try{ f = make(); }catch(e){ continue; }
+      if(!(navigator.canShare && navigator.canShare({files:[f]}))) continue;
+      try{
+        await navigator.share({files:[f]});
+        status.style.display = "none";
+        return; // 成功
+      }catch(err){
+        if(err && err.name === "AbortError") return; // 使用者自己取消
+        errors.push((err && err.name) + ":" + (err && err.message));
+      }
     }
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "這支手機/瀏覽器不允許直接分享這個檔案（" + (errors[0] || "未知錯誤") + "）。檔案已經下載到手機的「下載」資料夾，請打開「檔案」App，長按該檔案選「分享」，就能傳到 LINE / Drive / Email。";
   };
 }
 
