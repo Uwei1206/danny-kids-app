@@ -1,0 +1,32 @@
+{
+  "name": "丹尼互動美語 文件小幫手",
+  "short_name": "文件小幫手",
+  "description": "丹尼互動美語內部文件產生工具：學生名單、名條、點名表、教材管理、進度追蹤表",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FBF9F6",
+  "theme_color": "#E6197F",
+  "lang": "zh-Hant-TW",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

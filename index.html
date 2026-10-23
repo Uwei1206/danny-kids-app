@@ -1,0 +1,2915 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>丹尼互動美語 · 文件小幫手</title>
+
+<!-- PWA：安裝到手機主畫面所需的設定 -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#E6197F">
+<link rel="icon" href="./icon-192.png">
+<!-- iOS（Safari）沒有完整支援 manifest 安裝，需要以下這組額外標籤，
+     才能在「加入主畫面」時使用正確的圖示、全螢幕顯示、不跳出網址列 -->
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="文件小幫手">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --pink:#E6197F;
+    --blue:#1C4FA1;
+    --ink:#1A1A2E;
+    --paper:#FBF9F6;
+    --line:#E4DFD8;
+    --ok:#1E7A4C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    padding-bottom:76px;
+  }
+  header{
+    background:linear-gradient(135deg,var(--pink),var(--blue));
+    padding:24px 20px 20px;
+    color:#fff;
+    position:sticky;
+    top:0;
+    z-index:5;
+  }
+  header .tag{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    opacity:.85;
+    margin-bottom:4px;
+  }
+  header h1{
+    margin:0;
+    font-size:20px;
+    font-weight:800;
+  }
+  main{
+    max-width:480px;
+    margin:0 auto;
+    padding:16px;
+  }
+  .page{display:none;}
+  .page.active{display:block;}
+
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
+  }
+  .card h2{
+    font-size:15px;
+    margin:0 0 4px;
+  }
+  .card .sub{
+    font-size:12px;
+    color:#8a8578;
+    margin:0 0 14px;
+  }
+
+  .student-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:8px;
+    align-items:center;
+  }
+  .student-row input.grade{width:64px;flex:none;}
+  .student-row input{
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:15px;
+    background:#FCFBF9;
+    min-width:0;
+  }
+  .student-row input.name{flex:1;}
+  .student-row input:focus{outline:2px solid var(--blue); outline-offset:1px;}
+  .student-row button{
+    width:34px;height:34px;flex:none;
+    border:none;
+    background:#F3E9EC;
+    color:#B23A5A;
+    border-radius:8px;
+    font-size:16px;
+    line-height:1;
+  }
+  .col-label{display:flex; gap:8px; font-size:11px; color:#999; padding:0 0 6px;}
+  .col-label span:first-child{width:64px;flex:none;}
+  .col-label span:nth-child(2){flex:1;}
+
+  #addStudent{
+    width:100%;
+    padding:10px;
+    border:1.5px dashed var(--line);
+    background:transparent;
+    color:var(--blue);
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+    margin-top:4px;
+  }
+  .count-badge{
+    display:inline-block;
+    background:#F3E9EC;
+    color:var(--pink);
+    font-size:12px;
+    font-weight:700;
+    padding:2px 10px;
+    border-radius:999px;
+    margin-left:6px;
+  }
+
+  .orientation-group{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .orientation-option{flex:1; position:relative;}
+  .orientation-option input{
+    position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer;
+  }
+  .orientation-option label{
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    padding:12px 4px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    font-size:12px;
+    color:#8a8578;
+    background:#FCFBF9;
+  }
+  .orientation-option label .glyph{
+    font-size:18px; font-weight:700; color:var(--ink); letter-spacing:1px;
+  }
+  .orientation-option label .glyph.vertical{writing-mode:vertical-rl; letter-spacing:1px;}
+  .orientation-option input:checked + label{
+    border-color:var(--pink); background:#FBECEF; color:var(--pink); font-weight:700;
+  }
+  .orientation-option input:checked + label .glyph{color:var(--pink);}
+  .orientation-option input:focus-visible + label{outline:2px solid var(--blue); outline-offset:2px;}
+
+  .copies-field{margin-bottom:12px;}
+  .copies-field label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    margin-bottom:6px;
+  }
+  .copies-field .row{display:flex; align-items:center; gap:10px;}
+  .copies-field input[type="number"]{
+    width:80px;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:15px;
+    background:#FCFBF9;
+  }
+  .copies-field .hint{font-size:11.5px; color:#8a8578; margin-top:6px;}
+  .copies-field .hint b{color:var(--pink);}
+  .mixed-fields{display:none; gap:4px; flex-direction:column;}
+  .mixed-fields.active{display:flex;}
+  .single-field.hidden{display:none;}
+
+  .primary-btn{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--blue);
+    color:#fff;
+    font-size:16px;
+    font-weight:700;
+    margin-top:4px;
+  }
+  .primary-btn:disabled{opacity:.5;}
+  .share-btn{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--ok);
+    color:#fff;
+    font-size:16px;
+    font-weight:700;
+    margin-top:10px;
+    display:none;
+  }
+  #status{
+    font-size:13px;
+    color:#666;
+    margin-top:10px;
+    line-height:1.6;
+    display:none;
+    padding:10px 12px;
+    background:#F3F1EA;
+    border-radius:8px;
+  }
+  #status.error{color:#B23A5A; background:#FBECEF;}
+  .empty{text-align:center; color:#999; font-size:13px; padding:20px 0;}
+
+  .month-picker{
+    display:flex; gap:10px; align-items:center; margin-bottom:14px;
+  }
+  .month-picker input[type="month"]{
+    flex:1;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:15px;
+    background:#FCFBF9;
+  }
+  .recalc-btn{
+    padding:10px 14px;
+    border:none;
+    border-radius:8px;
+    background:#F3E9EC;
+    color:var(--pink);
+    font-weight:700;
+    font-size:13px;
+  }
+  .workday-list{
+    max-height:260px;
+    overflow-y:auto;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:6px;
+    margin-bottom:12px;
+  }
+  .workday-item{
+    display:flex; align-items:center; gap:8px;
+    padding:7px 6px;
+    font-size:13.5px;
+    border-bottom:1px solid #F1EDE6;
+  }
+  .workday-item:last-child{border-bottom:none;}
+  .workday-item input{width:17px; height:17px; flex:none;}
+  .workday-item .wd{color:#999; font-size:12px;}
+  .workday-summary{font-size:12px; color:#8a8578; margin-bottom:12px;}
+  .workday-summary b{color:var(--pink);}
+
+  /* Phase2.5修正：欄位標題原本用固定px寬度(76px/56px)，跟下面實際輸入框
+     的flex比例寬度(1.3fr/1.5fr/54px)對不上，畫面變窄、輸入框換行時標題
+     就會跟欄位錯開。這裡改成套用完全一樣的flex-basis比例+flex-wrap，
+     讓標題永遠跟對應欄位對齊，包括換行後的狀態。 */
+  .curriculum-header-row{
+    display:flex; flex-wrap:wrap; gap:6px;
+    font-size:11px; color:#999;
+    padding:0 6px 6px;
+  }
+  .curriculum-header-row .cu-unit{flex:1.3 1 100px;}
+  .curriculum-header-row .cu-content{flex:1.5 1 120px;}
+  .curriculum-header-row .cu-pages{flex:0 1 54px; min-width:48px; text-align:right;}
+  .curriculum-row{
+    display:flex; gap:6px; align-items:center;
+    padding:8px 6px;
+    font-size:13.5px;
+    border-bottom:1px solid #F1EDE6;
+  }
+  .curriculum-row:last-child{border-bottom:none;}
+  .curriculum-unit{width:76px; flex:none; color:var(--ink); font-weight:600; word-break:break-all;}
+  .curriculum-content{flex:1; word-break:break-all;}
+  .curriculum-pages{width:56px; flex:none; text-align:right; color:#8a8578;}
+  .curriculum-row.is-exam{background:#FBECEF;}
+  .curriculum-row .count-badge{margin-left:6px; font-size:10px; padding:1px 7px;}
+
+  .curriculum-edit-row{
+    padding:10px 6px;
+    border-bottom:1px solid #F1EDE6;
+  }
+  .curriculum-edit-row:last-child{border-bottom:none;}
+  .curriculum-edit-row.is-important{background:#FBECEF;}
+  .cu-edit-fields{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;}
+  .cu-input{
+    padding:8px 9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13.5px;
+    background:#FCFBF9;
+    min-width:0;
+  }
+  .cu-input:focus{outline:2px solid var(--blue); outline-offset:1px;}
+  /* 單元欄原本固定64px太窄，長單元名稱幾乎看不到；改用flex比例讓它跟內容
+     欄按比例分配可用寬度（比例上單元稍微少一點，因為內容通常更長），畫面
+     窄到擠不下時flex-wrap會自動換行，不需要橫向捲軸，也不影響輸入本身。 */
+  .cu-input-unit{flex:1.3 1 100px;}
+  .cu-input-content{flex:1.5 1 120px;}
+  .cu-input-pages{flex:0 1 54px; min-width:48px;}
+  .cu-edit-actions{display:flex; align-items:center; gap:10px;}
+  .cu-important-label{
+    display:flex; align-items:center; gap:5px;
+    font-size:12.5px; color:#8a8578;
+  }
+  .cu-important-label input{width:16px; height:16px;}
+  .cu-move-btns{display:flex; gap:4px; margin-left:auto;}
+  .cu-move-btns button, .cu-delete-btn{
+    width:30px; height:30px;
+    border:none;
+    border-radius:8px;
+    background:#F3F1EA;
+    color:#8a8578;
+    font-size:14px;
+    line-height:1;
+  }
+  .cu-move-btns button:disabled{opacity:.35;}
+  .cu-delete-btn{background:#F3E9EC; color:#B23A5A;}
+  .cu-toolbar-row{
+    display:flex;
+    gap:8px;
+    margin-top:8px;
+  }
+  #addCurriculumRow{
+    flex:1 1 auto;
+    padding:10px;
+    border:1.5px dashed var(--line);
+    background:transparent;
+    color:var(--blue);
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+  }
+  #curriculumUndoBtn{
+    flex:0 0 auto;
+    padding:10px 14px;
+    border:1.5px solid var(--line);
+    background:transparent;
+    color:#5a5548;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+  }
+  #curriculumUndoBtn:disabled{
+    opacity:.35;
+  }
+  .cu-data-toolbar{
+    display:flex;
+    gap:8px;
+    margin-bottom:12px;
+  }
+  .cu-data-toolbar button{
+    flex:1 1 auto;
+    padding:10px;
+    border:1.5px solid var(--line);
+    background:transparent;
+    color:#5a5548;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+  }
+  .cu-block-title{
+    font-size:15px;
+    color:var(--ink);
+    margin:4px 0 10px;
+  }
+  #curriculumStatus{
+    font-size:13px;
+    color:#666;
+    margin-top:10px;
+    line-height:1.6;
+    display:none;
+    padding:10px 12px;
+    background:#F3F1EA;
+    border-radius:8px;
+  }
+  #curriculumStatus.error{color:#B23A5A; background:#FBECEF;}
+  /* Phase2.6：只是一個輕量的「下一步去哪」提示，刻意不做成卡片/大按鈕，
+     避免搶過教材清單本身的注意力。*/
+  .cu-next-step{
+    margin-top:14px;
+    font-size:12.5px;
+    color:#8a8578;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:6px;
+  }
+  .cu-next-step button{
+    background:none;
+    border:none;
+    padding:0;
+    color:var(--blue);
+    font-size:12.5px;
+    font-weight:700;
+    text-decoration:underline;
+  }
+
+  nav.tabbar{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:#fff;
+    border-top:1px solid var(--line);
+    display:flex;
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+    z-index:10;
+  }
+  nav.tabbar button{
+    flex:1;
+    background:none;
+    border:none;
+    padding:8px 4px;
+    font-size:12px;
+    color:#999;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+  }
+  nav.tabbar button .ic{font-size:18px;}
+  nav.tabbar button.active{color:var(--pink);font-weight:700;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">丹尼互動美語</div>
+  <h1 id="pageTitle">學生名單</h1>
+</header>
+
+<main>
+
+  <section class="page active" id="page-students">
+    <div class="card">
+      <h2>目前在班學生<span class="count-badge" id="studentCount">0</span></h2>
+      <p class="sub">直接在手機上新增、修改、刪除，資料會自動存在這支手機裡，之後點名表、名條、進度追蹤表都會讀這裡的名單。</p>
+      <div class="col-label"><span>年級</span><span>姓名</span></div>
+      <div id="studentList"></div>
+      <div class="empty" id="emptyHint" style="display:none;">目前還沒有學生，按下面「新增學生」開始建立名單</div>
+      <button id="addStudent" type="button">＋ 新增學生</button>
+    </div>
+  </section>
+
+  <section class="page" id="page-nametags">
+    <div class="card">
+      <h2>產生名條</h2>
+      <p class="sub">欄數自動依人數調整，超過欄位上限會接續排到下一列，不留大片空白。</p>
+
+      <div class="orientation-group" role="radiogroup" aria-label="文字方向">
+        <div class="orientation-option">
+          <input type="radio" name="orientation" id="orient-vertical" value="vertical" checked>
+          <label for="orient-vertical"><span class="glyph vertical">直書</span>直書</label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="orientation" id="orient-horizontal" value="horizontal">
+          <label for="orient-horizontal"><span class="glyph">橫書</span>橫書</label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="orientation" id="orient-both" value="both">
+          <label for="orient-both"><span class="glyph">都要</span>都要</label>
+        </div>
+      </div>
+
+      <div class="single-field copies-field" id="singleCopiesField">
+        <label for="copiesInput">要印幾份</label>
+        <div class="row">
+          <input type="number" id="copiesInput" min="1" value="3">
+        </div>
+        <div class="hint" id="singleHint"></div>
+      </div>
+
+      <div class="mixed-fields" id="mixedCopiesFields">
+        <div class="copies-field">
+          <label for="copiesVertical">直書要印幾份</label>
+          <div class="row"><input type="number" id="copiesVertical" min="0" value="2"></div>
+          <div class="hint" id="mixedHintV"></div>
+        </div>
+        <div class="copies-field">
+          <label for="copiesHorizontal">橫書要印幾份</label>
+          <div class="row"><input type="number" id="copiesHorizontal" min="0" value="2"></div>
+          <div class="hint" id="mixedHintH"></div>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="generateBtn" type="button">產生並下載名條 (.xlsx)</button>
+      <button class="share-btn" id="shareBtn" type="button">分享到 Drive / LINE / Email</button>
+      <div id="status"></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-attendance">
+    <div class="card">
+      <h2>產生點名表</h2>
+      <p class="sub">選好月份後，會自動列出當月工作天（已排除週末與台灣國定假日），你可以再手動勾掉不需要的日子（例如班上另外停課）。</p>
+
+      <div class="month-picker">
+        <input type="month" id="attMonth">
+        <button class="recalc-btn" id="recalcBtn" type="button">重新試算</button>
+      </div>
+
+      <div class="workday-summary" id="workdaySummary"></div>
+      <div class="workday-list" id="workdayList"></div>
+
+      <button class="primary-btn" id="attGenerateBtn" type="button">產生並下載點名表 (.xlsx)</button>
+      <button class="share-btn" id="attShareBtn" type="button">分享到 Drive / LINE / Email</button>
+      <div id="attStatus"></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-progress">
+    <div class="card">
+      <h2>產生進度追蹤表</h2>
+      <p class="sub">依「學生名單」目前的實際人數與順序，自動產生對應數量的學生欄位（國語／數學／社會／自然四科），單元、內容、頁數維持範本原樣，學生欄位下方保持空白由老師自行填寫。</p>
+
+      <button class="primary-btn" id="progressGenerateBtn" type="button">產生並下載進度追蹤表 (.xlsx)</button>
+      <button class="share-btn" id="progressShareBtn" type="button">分享到 Drive / LINE / Email</button>
+      <div id="progressStatus"></div>
+    </div>
+  </section>
+
+  <section class="page" id="page-curriculum">
+    <div class="card">
+      <h2>教材管理</h2>
+      <p class="sub">內容第一次載入時會自動從進度追蹤表範本讀取，之後所有修改都會直接存在這台裝置上，重新整理也不會遺失。</p>
+
+      <div class="cu-data-toolbar">
+        <button id="importCurriculumBtn" type="button">匯入教材</button>
+        <button id="exportCurriculumBtn" type="button">匯出教材</button>
+        <input type="file" id="importCurriculumFile" accept=".json,application/json" style="display:none">
+      </div>
+      <p class="sub">匯出：把目前教材存成檔案備份。匯入：用檔案內容取代目前教材，建議先匯出備份再匯入。</p>
+
+      <div class="orientation-group" role="radiogroup" aria-label="科目" id="curriculumSubjectGroup">
+        <div class="orientation-option">
+          <input type="radio" name="curriculumSubject" id="subj-國" value="國" checked>
+          <label for="subj-國"><span class="glyph">國語</span></label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="curriculumSubject" id="subj-數" value="數">
+          <label for="subj-數"><span class="glyph">數學</span></label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="curriculumSubject" id="subj-社" value="社">
+          <label for="subj-社"><span class="glyph">社會</span></label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="curriculumSubject" id="subj-自" value="自">
+          <label for="subj-自"><span class="glyph">自然</span></label>
+        </div>
+      </div>
+
+      <div class="orientation-group" role="radiogroup" aria-label="期別" id="curriculumTermGroup">
+        <div class="orientation-option">
+          <input type="radio" name="curriculumTerm" id="term-期中" value="期中" checked>
+          <label for="term-期中"><span class="glyph">期中</span></label>
+        </div>
+        <div class="orientation-option">
+          <input type="radio" name="curriculumTerm" id="term-期末" value="期末">
+          <label for="term-期末"><span class="glyph">期末</span></label>
+        </div>
+      </div>
+
+      <h3 id="curriculumBlockTitle" class="cu-block-title"></h3>
+      <div class="curriculum-header-row">
+        <span class="cu-unit">單元</span><span class="cu-content">內容</span><span class="cu-pages">頁數</span>
+      </div>
+      <div id="curriculumList"></div>
+      <div class="cu-toolbar-row">
+        <button id="addCurriculumRow" type="button">＋ 新增教材</button>
+        <button id="curriculumUndoBtn" type="button" disabled>↩ 復原</button>
+      </div>
+      <div id="curriculumStatus"></div>
+      <div class="cu-next-step">
+        <span>教材確認好了嗎？</span>
+        <button id="curriculumGoToProgressBtn" type="button">前往「進度追蹤表」產生 Excel →</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button type="button" class="active" data-page="students" data-title="學生名單">
+    <span class="ic">👥</span>學生名單
+  </button>
+  <button type="button" data-page="nametags" data-title="名條">
+    <span class="ic">🏷️</span>名條
+  </button>
+  <button type="button" data-page="attendance" data-title="點名表">
+    <span class="ic">📅</span>點名表
+  </button>
+  <button type="button" data-page="curriculum" data-title="教材管理">
+    <span class="ic">📚</span>教材
+  </button>
+  <button type="button" data-page="progress" data-title="進度追蹤表">
+    <span class="ic">📈</span>進度表
+  </button>
+</nav>
+
+<script>
+/* ---------- 共用：學生名單資料存取 ---------- */
+const STORAGE_KEY = "danny_students_v1";
+
+function loadStudents(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function saveStudents(list){ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+function seedDefaultStudents(){
+  return [
+    {grade:"201", name:"A"},{grade:"217", name:"B"},{grade:"215", name:"C"},
+    {grade:"204", name:"D"},{grade:"206", name:"E"},{grade:"201", name:"F"},
+    {grade:"208", name:"G"},{grade:"215", name:"H"},{grade:"205", name:"I"},
+    {grade:"205", name:"J"},{grade:"208", name:"K"},
+  ];
+}
+let students = loadStudents();
+if(students === null){ students = seedDefaultStudents(); saveStudents(students); }
+
+/* ---------- 頁面一：學生名單管理 ---------- */
+function renderStudents(){
+  const list = document.getElementById("studentList");
+  const empty = document.getElementById("emptyHint");
+  const count = document.getElementById("studentCount");
+  count.textContent = students.length;
+  empty.style.display = students.length === 0 ? "block" : "none";
+  list.innerHTML = "";
+  students.forEach((s, i) => {
+    const row = document.createElement("div");
+    row.className = "student-row";
+    row.innerHTML = `
+      <input class="grade" type="text" value="${s.grade || ""}" data-field="grade" data-idx="${i}" placeholder="年級">
+      <input class="name" type="text" value="${s.name || ""}" data-field="name" data-idx="${i}" placeholder="姓名">
+      <button type="button" data-remove="${i}" aria-label="刪除這位學生">×</button>
+    `;
+    list.appendChild(row);
+  });
+  list.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      students[+e.target.dataset.idx][e.target.dataset.field] = e.target.value;
+      saveStudents(students);
+      updateHints();
+    });
+  });
+  list.querySelectorAll("button[data-remove]").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      students.splice(+e.target.dataset.remove, 1);
+      saveStudents(students);
+      renderStudents();
+      updateHints();
+    });
+  });
+}
+document.getElementById("addStudent").addEventListener("click", ()=>{
+  students.push({grade:"", name:""});
+  saveStudents(students);
+  renderStudents();
+  const rows = document.querySelectorAll("#studentList .student-row .name");
+  if(rows.length) rows[rows.length-1].focus();
+});
+
+/* ---------- 頁面二：名條產生（完全動態排版，接續填滿每一列） ---------- */
+const TEMPLATE_PATH = "templates/_範本_名條.xlsx";
+const SHEET_PATH = "xl/worksheets/sheet1.xml";
+const STYLES_PATH = "xl/styles.xml";
+const NUMBER_STYLE_ID = "2";
+const VERTICAL_STYLE_ID = "3";
+const HORIZONTAL_STYLE_ID = "5";
+
+// 橫書樣式（新增）：置中 + 縮小字型以適合欄寬
+const HORIZONTAL_XF = `<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" shrinkToFit="1"/></xf>`;
+// 直書樣式（範本原有的，這裡是它原本的樣子，用來定位置換）
+const VERTICAL_XF_BEFORE = `<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" textRotation="255"/></xf>`;
+// 直書樣式（修正後）：加上 vertical="center" 讓姓名垂直置中
+const VERTICAL_XF_AFTER = `<xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" textRotation="255"/></xf>`;
+
+const V_MAX_COLS = 15, V_MAX_ROWS = 5;
+const H_MAX_COLS = 14, H_MAX_ROWS = 9;
+
+function escapeXml(str){
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+}
+function colLetter(idx){
+  let s = ""; idx += 1;
+  while(idx > 0){
+    const rem = (idx - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    idx = Math.floor((idx - 1) / 26);
+  }
+  return s;
+}
+
+// 容量計算：用「總格數」而非「份數x固定行數」，才能反映接續排列省下的空間
+function maxCopiesFor(n, maxCols, maxBlockRows){
+  return Math.max(1, Math.floor((maxBlockRows * maxCols) / (n || 1)));
+}
+function rowsUsedFor(n, copies, maxCols){
+  return Math.max(1, Math.ceil(((n||1) * copies) / maxCols));
+}
+
+// 姓名列表 x 份數 攤平成一條連續序列，每滿 maxCols 就換一列，
+// 換列不會重新從第一份開始，而是直接接著下一份繼續填，減少浪費。
+function buildSection(names, styleId, maxCols, copies, startRow){
+  const flat = [];
+  for(let c=0;c<copies;c++) flat.push(...names);
+  let r = startRow;
+  let xml = "";
+  const colsUsed = Math.min(flat.length, maxCols) || maxCols;
+  for(let i=0;i<flat.length;i+=maxCols){
+    const rowSlice = flat.slice(i, i+maxCols);
+    const cols = rowSlice.length;
+    let numCells = "", nameCells = "";
+    for(let k=0;k<cols;k++){
+      const ref = colLetter(k) + r;
+      // 序號要跟「學生本身」綁定，不是跟「印在第幾欄」綁定：接續排列會讓
+      // 同一份的最後幾位跟下一份的開頭擠在同一列，此時序號要重新從1開始
+      // 算下一份，不能沿用列位置(k+1)一路累加下去。
+      const studentNum = ((i + k) % names.length) + 1;
+      numCells += `<c r="${ref}" s="${NUMBER_STYLE_ID}"><v>${studentNum}</v></c>`;
+    }
+    xml += `<row r="${r}" spans="1:${cols}" ht="18" x14ac:dyDescent="0.3">${numCells}</row>`;
+    r++;
+    for(let k=0;k<cols;k++){
+      const ref = colLetter(k) + r;
+      const name = rowSlice[k] || "";
+      nameCells += name
+        ? `<c r="${ref}" s="${styleId}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(name)}</t></is></c>`
+        : `<c r="${ref}" s="${styleId}"/>`;
+    }
+    xml += `<row r="${r}" spans="1:${cols}" x14ac:dyDescent="0.3">${nameCells}</row>`;
+    r++;
+    xml += `<row r="${r}" spans="1:${cols}" x14ac:dyDescent="0.3"/>`;
+    r++;
+  }
+  return { xml, nextRow: r, colsUsed };
+}
+
+function patchVerticalCenter(stylesXml){
+  if(!stylesXml.includes(VERTICAL_XF_BEFORE)) return stylesXml; // 找不到就不動，避免破壞檔案
+  return stylesXml.replace(VERTICAL_XF_BEFORE, VERTICAL_XF_AFTER);
+}
+function addHorizontalStyle(stylesXml){
+  const patched = stylesXml
+    .replace(/<cellXfs count="(\d+)">/, (m, n) => `<cellXfs count="${+n+1}">`)
+    .replace("</cellXfs>", HORIZONTAL_XF + "</cellXfs>");
+  if(patched === stylesXml) throw new Error("無法在範本樣式表裡加入橫書樣式，範本結構可能跟預期不同");
+  return patched;
+}
+
+function currentStudentCount(){
+  return students.map(s=>(s.name||"").trim()).filter(n=>n.length>0).length;
+}
+
+function mixedRemainingMaxH(n, vVal){
+  const vRows = rowsUsedFor(n, vVal, V_MAX_COLS);
+  const remainFrac = Math.max(0, 1 - vRows / V_MAX_ROWS);
+  const remainRows = Math.floor(remainFrac * H_MAX_ROWS);
+  return Math.max(0, Math.floor((remainRows * H_MAX_COLS) / (n||1)));
+}
+
+function clampMixedInputs(){
+  const n = currentStudentCount() || 1;
+  const vInput = document.getElementById("copiesVertical");
+  const hInput = document.getElementById("copiesHorizontal");
+  let vVal = Math.max(0, parseInt(vInput.value, 10) || 0);
+  let hVal = Math.max(0, parseInt(hInput.value, 10) || 0);
+
+  const maxV = maxCopiesFor(n, V_MAX_COLS, V_MAX_ROWS);
+  vVal = Math.min(vVal, maxV);
+
+  let remainH = mixedRemainingMaxH(n, vVal);
+  if(hVal > remainH) hVal = remainH;
+
+  vInput.value = vVal;
+  hInput.value = hVal;
+  vInput.max = maxV;
+  hInput.max = mixedRemainingMaxH(n, 0);
+
+  document.getElementById("mixedHintV").innerHTML = `純直書最多約 <b>${maxV}</b> 份`;
+  document.getElementById("mixedHintH").innerHTML = `目前直書設定下，橫書最多還能印 <b>${mixedRemainingMaxH(n, vVal)}</b> 份`;
+}
+
+function updateHints(){
+  const n = currentStudentCount() || 1;
+  const mode = document.querySelector('input[name="orientation"]:checked').value;
+
+  document.getElementById("singleCopiesField").classList.toggle("hidden", mode === "both");
+  document.getElementById("mixedCopiesFields").classList.toggle("active", mode === "both");
+
+  if(mode === "vertical"){
+    const max = maxCopiesFor(n, V_MAX_COLS, V_MAX_ROWS);
+    const input = document.getElementById("copiesInput");
+    input.max = max;
+    if(+input.value > max) input.value = max;
+    document.getElementById("singleHint").innerHTML = `目前 ${n} 位學生，直書版面上限約 <b>${max}</b> 份`;
+  }else if(mode === "horizontal"){
+    const max = maxCopiesFor(n, H_MAX_COLS, H_MAX_ROWS);
+    const input = document.getElementById("copiesInput");
+    input.max = max;
+    if(+input.value > max) input.value = max;
+    document.getElementById("singleHint").innerHTML = `目前 ${n} 位學生，橫書版面上限約 <b>${max}</b> 份`;
+  }else{
+    clampMixedInputs();
+  }
+}
+document.querySelectorAll('input[name="orientation"]').forEach(r=>r.addEventListener("change", updateHints));
+document.getElementById("copiesVertical").addEventListener("input", clampMixedInputs);
+document.getElementById("copiesHorizontal").addEventListener("input", clampMixedInputs);
+
+document.getElementById("generateBtn").addEventListener("click", async ()=>{
+  const status = document.getElementById("status");
+  const shareBtn = document.getElementById("shareBtn");
+  const genBtn = document.getElementById("generateBtn");
+  const mode = document.querySelector('input[name="orientation"]:checked').value;
+
+  const names = students.map(s=>(s.name||"").trim()).filter(n=>n.length>0);
+
+  status.className = "";
+  if(names.length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "「學生名單」頁面目前還沒有資料，請先去新增學生。";
+    return;
+  }
+
+  let vCopies = 0, hCopies = 0;
+  if(mode === "vertical"){
+    vCopies = Math.max(1, parseInt(document.getElementById("copiesInput").value, 10) || 1);
+  }else if(mode === "horizontal"){
+    hCopies = Math.max(1, parseInt(document.getElementById("copiesInput").value, 10) || 1);
+  }else{
+    clampMixedInputs();
+    vCopies = Math.max(0, parseInt(document.getElementById("copiesVertical").value, 10) || 0);
+    hCopies = Math.max(0, parseInt(document.getElementById("copiesHorizontal").value, 10) || 0);
+    if(vCopies === 0 && hCopies === 0){
+      status.style.display = "block";
+      status.className = "error";
+      status.textContent = "直書、橫書份數請至少填一個大於 0 的數字。";
+      return;
+    }
+  }
+
+  genBtn.disabled = true;
+  genBtn.textContent = "產生中…";
+
+  try{
+    const resp = await fetch(encodeURI(TEMPLATE_PATH));
+    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_名條.xlsx`);
+    const buf = await resp.arrayBuffer();
+
+    const zip = await JSZip.loadAsync(buf);
+    const sheetFile = zip.file(SHEET_PATH);
+    const stylesFile = zip.file(STYLES_PATH);
+    if(!sheetFile || !stylesFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+
+    let stylesXml = await stylesFile.async("string");
+    stylesXml = patchVerticalCenter(stylesXml); // 直書姓名置中
+    if(hCopies > 0){
+      stylesXml = addHorizontalStyle(stylesXml); // 需要橫書時才新增橫書樣式
+    }
+    zip.file(STYLES_PATH, stylesXml);
+
+    let sheetXml = await sheetFile.async("string");
+
+    let sheetData = "";
+    let rowCursor = 1;
+    let maxColsOverall = 1;
+
+    if(vCopies > 0){
+      const sec = buildSection(names, VERTICAL_STYLE_ID, V_MAX_COLS, vCopies, rowCursor);
+      sheetData += sec.xml;
+      rowCursor = sec.nextRow;
+      maxColsOverall = Math.max(maxColsOverall, sec.colsUsed);
+    }
+    if(hCopies > 0){
+      const sec = buildSection(names, HORIZONTAL_STYLE_ID, H_MAX_COLS, hCopies, rowCursor);
+      sheetData += sec.xml;
+      rowCursor = sec.nextRow;
+      maxColsOverall = Math.max(maxColsOverall, sec.colsUsed);
+    }
+
+    const lastCol = colLetter(maxColsOverall - 1);
+    const lastRow = Math.max(1, rowCursor - 1);
+    const colWidth = hCopies > 0 ? 10 : 9;
+
+    sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:${lastCol}${lastRow}"/>`);
+    sheetXml = sheetXml.replace(/<sheetData>[\s\S]*?<\/sheetData>/, `<sheetData>${sheetData}</sheetData>`);
+    sheetXml = sheetXml.replace(/<cols>[\s\S]*?<\/cols>/, `<cols><col min="1" max="${maxColsOverall}" width="${colWidth}" customWidth="1"/></cols>`);
+    sheetXml = sheetXml.replace(/<worksheet ([^>]*)>/, `<worksheet $1><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`);
+    sheetXml = sheetXml.replace(/<pageSetup ([^/]*)\/>/, `<pageSetup $1 fitToWidth="1" fitToHeight="1"/>`);
+
+    zip.file(SHEET_PATH, sheetXml);
+    const outBuf = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const today = new Date();
+    const fname = `名條_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}.xlsx`;
+    const file = new File([outBuf], fname, {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    status.style.display = "block";
+    status.className = "";
+    status.textContent = `已產生 ${names.length} 位學生的名條（${mode === "both" ? `直書${vCopies}份＋橫書${hCopies}份` : (mode==="vertical"?`直書${vCopies}份`:`橫書${hCopies}份`)}）。`;
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      shareBtn.style.display = "block";
+      shareBtn.onclick = async ()=>{
+        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 名條"}); }
+        catch(err){ /* 使用者取消分享，屬正常操作 */ }
+      };
+    }else{
+      shareBtn.style.display = "none";
+    }
+
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "產生失敗：" + err.message;
+  }finally{
+    genBtn.disabled = false;
+    genBtn.textContent = "產生並下載名條 (.xlsx)";
+  }
+});
+
+/* ---------- 頁面三：點名表產生 ---------- */
+const ATT_TEMPLATE_PATH = "templates/_範本_點名表.xlsx";
+const ATT_SHEET_PATH = "xl/worksheets/sheet1.xml";
+const ATT_WORKBOOK_PATH = "xl/workbook.xml";
+
+// 2026年台灣國定假日（含補假），資料來源：行政院人事行政總處公告
+// 之後若有新年度，直接在這裡新增一組 "西元年": [...] 即可
+const TW_HOLIDAYS_BY_YEAR = {
+  2026: [
+    "2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19",
+    "2026-02-20","2026-02-27","2026-04-03","2026-04-06","2026-05-01",
+    "2026-06-19","2026-09-25","2026-09-28","2026-10-09","2026-10-26","2026-12-25"
+  ]
+};
+const WEEKDAY_LABELS = ["日","一","二","三","四","五","六"];
+
+function excelSerial(y, m, d){
+  const epoch = Date.UTC(1899,11,30);
+  return Math.round((Date.UTC(y, m-1, d) - epoch) / 86400000);
+}
+
+function computeWorkdays(year, month){
+  const holidays = new Set(TW_HOLIDAYS_BY_YEAR[year] || []);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const result = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dt = new Date(year, month-1, d);
+    const wd = dt.getDay();
+    if(wd===0 || wd===6) continue;
+    const iso = `${year}-${String(month).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    result.push({
+      iso, month: month, day: d, jsWeekday: wd,
+      label: `${month}/${d}`, wdLabel: WEEKDAY_LABELS[wd],
+      serial: excelSerial(year, month, d),
+      isHoliday: holidays.has(iso)
+    });
+  }
+  return result;
+}
+
+function getCellStyle(xml, ref){
+  const m = xml.match(new RegExp(`<c r="${ref}" s="(\\d+)"`));
+  return m ? m[1] : null;
+}
+function replaceCellRaw(xml, ref, newCellXml){
+  const regex = new RegExp(`<c r="${ref}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`);
+  if(!regex.test(xml)) throw new Error(`找不到儲存格 ${ref}，範本結構可能被改動過`);
+  return xml.replace(regex, newCellXml);
+}
+function insertCellIntoRow(xml, rowNum, newCellXml){
+  const regex = new RegExp(`(<row r="${rowNum}"[^>]*>[\\s\\S]*?)</row>`);
+  if(!regex.test(xml)) throw new Error(`找不到列 ${rowNum}，範本結構可能被改動過`);
+  return xml.replace(regex, `$1${newCellXml}</row>`);
+}
+// 依「日曆週」分組（週一為 key），而不是單看星期一/五，
+// 這樣如果週一或週五被國定假日排除，該週剩下的第一天/最後一天仍能正確拿到
+// 起始/結束樣式（見交接筆記 Bug3、2026/6/19端午節的迴歸測試案例）。
+function mondayKeyOf(iso){
+  const [y,m,d] = iso.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  const day = dt.getDay(); // 0=日..6=六
+  const diff = day === 0 ? -6 : 1 - day;
+  dt.setDate(dt.getDate() + diff);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+}
+// 回傳跟 dates 等長的陣列，每個元素是 "start"/"mid"/"end"，代表該日期
+// 在自己那個日曆週（週一~週五，缺的天跳過但整週仍算同一組）裡的位置。
+function computeGroupPositions(dates){
+  const groups = new Map();
+  dates.forEach((d, idx) => {
+    const key = mondayKeyOf(d.iso);
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(idx);
+  });
+  const pos = new Array(dates.length);
+  for(const idxs of groups.values()){
+    idxs.forEach((idx, j) => {
+      if(idxs.length === 1 || j === 0) pos[idx] = "start";
+      else if(j === idxs.length - 1) pos[idx] = "end";
+      else pos[idx] = "mid";
+    });
+  }
+  return pos;
+}
+// 樣式 id 對照表（已用 Node/Python 實測 xl/styles.xml 驗證，見交接筆記）：
+// 第35列有額外的底部粗框，樣式集合跟第8~34列不同，不能共用。
+const ROW6_STYLE  = {start:"4",  mid:"5",  end:"6"};
+const ROW7_STYLE  = {start:"7",  mid:"8",  end:"9"};
+const BODY_STYLE  = {start:"12", mid:"13", end:"14"};
+const LASTROW_STYLE = {start:"22", mid:"23", end:"24"};
+
+function defaultAttMonth(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,"0");
+  return `${y}-${m}`;
+}
+
+let currentWorkdays = [];
+
+function renderWorkdayList(){
+  const [y, m] = document.getElementById("attMonth").value.split("-").map(Number);
+  if(!y || !m){
+    document.getElementById("workdaySummary").textContent = "請先選擇月份";
+    document.getElementById("workdayList").innerHTML = "";
+    return;
+  }
+  currentWorkdays = computeWorkdays(y, m);
+  const hasHolidayData = TW_HOLIDAYS_BY_YEAR[y] !== undefined;
+
+  const list = document.getElementById("workdayList");
+  list.innerHTML = currentWorkdays.map((d, i) => `
+    <label class="workday-item">
+      <input type="checkbox" data-idx="${i}" ${d.isHoliday ? "" : "checked"}>
+      <span>${d.label}</span>
+      <span class="wd">星期${d.wdLabel}</span>
+      ${d.isHoliday ? '<span class="wd" style="color:#B23A5A;">國定假日</span>' : ""}
+    </label>
+  `).join("");
+
+  const summary = document.getElementById("workdaySummary");
+  if(!hasHolidayData){
+    summary.innerHTML = `${y}年目前還沒有內建國定假日資料，以下先列出全部平日，請自行勾掉假日。`;
+  }else{
+    const checkedCount = currentWorkdays.filter(d=>!d.isHoliday).length;
+    summary.innerHTML = `${y}年${m}月共 ${currentWorkdays.length} 個平日，已預先排除 ${currentWorkdays.length-checkedCount} 天國定假日，勾選 <b>${checkedCount}</b> 天。可再手動調整。`;
+  }
+}
+document.getElementById("attMonth").value = defaultAttMonth();
+document.getElementById("recalcBtn").addEventListener("click", renderWorkdayList);
+renderWorkdayList();
+
+document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
+  const status = document.getElementById("attStatus");
+  const shareBtn = document.getElementById("attShareBtn");
+  const genBtn = document.getElementById("attGenerateBtn");
+
+  const checkedBoxes = [...document.querySelectorAll("#workdayList input[type=checkbox]:checked")];
+  const dates = checkedBoxes.map(cb => currentWorkdays[+cb.dataset.idx]);
+
+  status.style.display = "none";
+  status.className = "";
+
+  if(dates.length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "請至少勾選一個日期。";
+    return;
+  }
+  if(students.map(s=>(s.name||"").trim()).filter(n=>n).length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "「學生名單」頁面目前還沒有資料，請先去新增學生。";
+    return;
+  }
+
+  genBtn.disabled = true;
+  genBtn.textContent = "產生中…";
+
+  try{
+    const resp = await fetch(encodeURI(ATT_TEMPLATE_PATH));
+    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_點名表.xlsx`);
+    const buf = await resp.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+
+    const sheetFile = zip.file(ATT_SHEET_PATH);
+    const wbFile = zip.file(ATT_WORKBOOK_PATH);
+    if(!sheetFile || !wbFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+
+    let sheetXml = await sheetFile.async("string");
+    let wbXml = await wbFile.async("string");
+
+    const n = dates.length;
+    if(n > 28){
+      throw new Error("這個月勾選的天數超過範本可支援的上限，請聯絡我協助擴充範本。");
+    }
+
+    // 依「日曆週」分組，決定每個日期在自己那一週裡是起始/週間/結束
+    // （套用到全部日期欄，不分原本21欄或延伸欄，見交接筆記 Bug3）
+    const groupPos = computeGroupPositions(dates);
+
+    // 原本21欄：定位填值（套用日曆週分組樣式）或清空（超過n的沿用原樣式）
+    for(let i=0;i<21;i++){
+      const col = colLetter(i+3);
+      const ref6 = col+"6", ref7 = col+"7";
+      if(i < n){
+        const d = dates[i];
+        const pos = groupPos[i];
+        sheetXml = replaceCellRaw(sheetXml, ref6, `<c r="${ref6}" s="${ROW6_STYLE[pos]}"><v>${d.serial}</v></c>`);
+        sheetXml = replaceCellRaw(sheetXml, ref7, `<c r="${ref7}" s="${ROW7_STYLE[pos]}" t="str"><f>CHOOSE(WEEKDAY(${col}6),"日","一","二","三","四","五","六")</f></c>`);
+        for(let row=8; row<=34; row++){
+          sheetXml = replaceCellRaw(sheetXml, col+row, `<c r="${col}${row}" s="${BODY_STYLE[pos]}"/>`);
+        }
+        sheetXml = replaceCellRaw(sheetXml, col+"35", `<c r="${col}35" s="${LASTROW_STYLE[pos]}"/>`);
+      }else{
+        const s6 = getCellStyle(sheetXml, ref6);
+        const s7 = getCellStyle(sheetXml, ref7);
+        sheetXml = replaceCellRaw(sheetXml, ref6, `<c r="${ref6}" s="${s6}"/>`);
+        sheetXml = replaceCellRaw(sheetXml, ref7, `<c r="${ref7}" s="${s7}"/>`);
+      }
+    }
+
+    // 超過21欄：往右延伸（同樣套用日曆週分組樣式，第35列用專屬的底部粗框樣式集合）
+    if(n > 21){
+      for(let i=21;i<n;i++){
+        const col = colLetter(i+3);
+        const d = dates[i];
+        const pos = groupPos[i];
+        sheetXml = insertCellIntoRow(sheetXml, 6, `<c r="${col}6" s="${ROW6_STYLE[pos]}"><v>${d.serial}</v></c>`);
+        sheetXml = insertCellIntoRow(sheetXml, 7, `<c r="${col}7" s="${ROW7_STYLE[pos]}" t="str"><f>CHOOSE(WEEKDAY(${col}6),"日","一","二","三","四","五","六")</f></c>`);
+        for(let row=8; row<=34; row++){
+          sheetXml = insertCellIntoRow(sheetXml, row, `<c r="${col}${row}" s="${BODY_STYLE[pos]}"/>`);
+        }
+        sheetXml = insertCellIntoRow(sheetXml, 35, `<c r="${col}35" s="${LASTROW_STYLE[pos]}"/>`);
+      }
+      const lastCol = colLetter(n+3-1);
+      sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A2:${lastCol}35"/>`);
+      sheetXml = sheetXml.replace(
+        /<col min="4" max="24" width="6.5" style="1" customWidth="1"\/>/,
+        `<col min="4" max="${n+3}" width="6.5" style="1" customWidth="1"/>`
+      );
+    }
+
+    // 學生列 B(年級)/C(姓名)
+    for(let i=0;i<28;i++){
+      const row = 8+i;
+      const refB = "B"+row, refC = "C"+row;
+      const sB = getCellStyle(sheetXml, refB); // B欄（年級）樣式：待確認範本正確字型後再統一套用，見交接筆記Bug2
+      const sC = "11"; // C欄（姓名）強制統一套用查證後的正確樣式（標楷體11+正確邊框），不再沿用原格 s=
+      if(i < students.length){
+        const grade = (students[i].grade||"").trim();
+        const name = (students[i].name||"").trim();
+        const gradeCell = grade === "" ? `<c r="${refB}" s="${sB}"/>`
+          : /^-?\d+(\.\d+)?$/.test(grade) ? `<c r="${refB}" s="${sB}"><v>${grade}</v></c>`
+          : `<c r="${refB}" s="${sB}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(grade)}</t></is></c>`;
+        sheetXml = replaceCellRaw(sheetXml, refB, gradeCell);
+        const nameCell = name === "" ? `<c r="${refC}" s="${sC}"/>`
+          : `<c r="${refC}" s="${sC}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(name)}</t></is></c>`;
+        sheetXml = replaceCellRaw(sheetXml, refC, nameCell);
+      }else{
+        sheetXml = replaceCellRaw(sheetXml, refB, `<c r="${refB}" s="${sB}"/>`);
+        sheetXml = replaceCellRaw(sheetXml, refC, `<c r="${refC}" s="${sC}"/>`);
+      }
+    }
+
+    // 確保開檔時重新計算星期公式
+    if(wbXml.includes("<calcPr")){
+      wbXml = wbXml.replace(/<calcPr([^/]*)\/>/, (m, attrs) => {
+        return attrs.includes("fullCalcOnLoad") ? m : `<calcPr${attrs} fullCalcOnLoad="1"/>`;
+      });
+    }
+
+    zip.file(ATT_SHEET_PATH, sheetXml);
+    zip.file(ATT_WORKBOOK_PATH, wbXml);
+
+    // 我們改了第7列的星期公式，範本原本的 calcChain.xml（計算鏈快取）會跟
+    // 新公式對不起來，導致 Excel 開檔跳「部分內容有問題，是否修復？」。
+    // 直接整個移除，Excel/LibreOffice 開檔時會自動重建，不影響功能。
+    zip.remove("xl/calcChain.xml");
+    const ctPath = "[Content_Types].xml";
+    const ctFile = zip.file(ctPath);
+    if(ctFile){
+      let ctXml = await ctFile.async("string");
+      ctXml = ctXml.replace(/<Override PartName="\/xl\/calcChain\.xml"[^>]*\/>/, "");
+      zip.file(ctPath, ctXml);
+    }
+
+    const outBuf = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const [y, m] = document.getElementById("attMonth").value.split("-");
+    const fname = `點名表_${y}年${m}月.xlsx`;
+    const file = new File([outBuf], fname, {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    status.style.display = "block";
+    status.className = "";
+    status.textContent = `已產生 ${y}年${m}月點名表，共 ${dates.length} 天、${students.length} 位學生。`;
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      shareBtn.style.display = "block";
+      shareBtn.onclick = async ()=>{
+        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 點名表"}); }
+        catch(err){ /* 使用者取消分享，屬正常操作 */ }
+      };
+    }else{
+      shareBtn.style.display = "none";
+    }
+
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "產生失敗：" + err.message;
+  }finally{
+    genBtn.disabled = false;
+    genBtn.textContent = "產生並下載點名表 (.xlsx)";
+  }
+});
+
+/* ---------- 頁面四：進度追蹤表產生 ---------- */
+// 【架構備註，Phase 2 教材可編輯化時的擴充點】
+// 目前 findStudentZoneRows()/isHeaderRow() 是直接從範本XML「偵測」出單元/內容/頁數
+// 這些教材列的位置，完全不讀取、不假設任何額外的教材資料來源。未來如果要開放老師
+// 從HTML編輯教材（新增/刪除/修改單元），應該改成：教材資料以 CurriculumRow[] 的
+// 形式存在 localStorage，本檔案這一段改成「依 CurriculumRow[] 動態組出列」而不是
+// 「偵測範本既有列」，但目前完全不做這件事，只是先確保現在的程式碼沒有寫死列號、
+// 沒有假設教材內容固定不變，之後替換資料來源時改動範圍可以侷限在這個區塊。
+const PROGRESS_TEMPLATE_PATH = "templates/_範本_進度追蹤表.xlsx";
+const PROGRESS_WORKBOOK_PATH = "xl/workbook.xml";
+const PROGRESS_SHARED_STRINGS_PATH = "xl/sharedStrings.xml";
+const PROGRESS_STYLES_PATH = "xl/styles.xml";
+const PROGRESS_SHEET_PATHS = ["xl/worksheets/sheet1.xml","xl/worksheets/sheet2.xml","xl/worksheets/sheet3.xml","xl/worksheets/sheet4.xml"];
+const PROGRESS_STUDENT_ZONE_START_IDX = 3; // D欄，0-based
+// 注意：範本原本D欄以後現成幾格、每頁實際能放幾個學生欄位，都不寫死常數，
+// 而是在 generateProgressReport() 裡依範本實際內容/版面動態偵測（見下方
+// detectNativeLastColIdx() 與 detectPageStudentCapacity()），理由見Phase1.3
+// 修正說明：Phase1.2 曾經寫死14人/頁，但實測範本紙張/邊界/縮放下一頁只能放
+// 13欄，之後範本若調整版面，寫死的數字就會一直是錯的。
+const PROGRESS_PAPER_SIZES_IN = { 1: [8.5, 11], 9: [8.267716535433071, 11.692913385826772] }; // Letter, A4（英吋，portrait基準）
+
+function colLetterToIndex(letters){
+  let n = 0;
+  for(const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1; // 轉成 0-based，跟 colLetter() 的輸入慣例對應
+}
+
+function parseSharedStrings(ssXml){
+  const items = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
+  return items.map(item => {
+    const texts = item.match(/<t[^>]*>[\s\S]*?<\/t>/g) || [];
+    return texts.map(t => t.replace(/^<t[^>]*>/, "").replace(/<\/t>$/, "")).join("");
+  });
+}
+
+// 用「這一列是否存在M欄」偵測「學生欄位區」實際涵蓋的列（表頭列+內容列），
+// 天然排除期中/期末之間格式不規則的間隔列，不用手動寫死列號範圍。
+function findStudentZoneRows(sheetXml){
+  const rows = [];
+  const re = /<c r="M(\d+)"/g;
+  let m;
+  while((m = re.exec(sheetXml))){ rows.push(parseInt(m[1], 10)); }
+  return rows;
+}
+
+// 表頭列的判斷依據：D欄目前的值是不是共用字串"A"（範本目前A~J表頭的第一個字母）
+function isHeaderRow(sheetXml, sharedStrings, row){
+  const m = sheetXml.match(new RegExp(`<c r="D${row}" s="\\d+" t="s"><v>(\\d+)</v></c>`));
+  if(!m) return false;
+  return sharedStrings[parseInt(m[1], 10)] === "A";
+}
+
+// ---- Phase 1.3：依範本實際版面動態偵測「一頁能放幾個學生欄位」----
+
+// 偵測範本D欄以後現成、連續存在的儲存格範圍（不寫死"13"，用範本實際內容判斷）
+function detectNativeLastColIdx(sheetXml, sampleRow){
+  let idx = PROGRESS_STUDENT_ZONE_START_IDX;
+  while(new RegExp(`<c r="${colLetter(idx)}${sampleRow}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`).test(sheetXml)){
+    idx++;
+  }
+  if(idx === PROGRESS_STUDENT_ZONE_START_IDX){
+    throw new Error(`範本結構與預期不符（第${sampleRow}列從D欄開始就沒有現成儲存格），為避免猜測性修改已停止產生，請回報這個訊息。`);
+  }
+  return idx - 1;
+}
+
+// 從 workbook 的「一般」(Normal) 樣式讀出 Excel 計算欄寬像素換算用的預設字型
+// （cellStyleXfs 第一項指到的字型，不是任一儲存格自己的字型）
+function getWorkbookDefaultFont(stylesXml){
+  const cellStyleXfsBlock = stylesXml.match(/<cellStyleXfs count="\d+">([\s\S]*?)<\/cellStyleXfs>/);
+  let fontId = "0";
+  if(cellStyleXfsBlock){
+    const firstXf = cellStyleXfsBlock[1].match(/<xf [^>]*?(?:\/>|>[\s\S]*?<\/xf>)/);
+    if(firstXf){
+      const m = firstXf[0].match(/fontId="(\d+)"/);
+      if(m) fontId = m[1];
+    }
+  }
+  const fontsList = parseFontsList(stylesXml);
+  const font = fontsList[parseInt(fontId, 10)] || fontsList[0];
+  if(!font) throw new Error("範本結構與預期不符（styles.xml找不到任何字型），為避免猜測性修改已停止產生，請回報這個訊息。");
+  const nameMatch = font.match(/<name val="([^"]+)"/);
+  const szMatch = font.match(/sz val="([\d.]+)"/);
+  return { name: nameMatch ? nameMatch[1] : "Calibri", sz: szMatch ? parseFloat(szMatch[1]) : 11 };
+}
+
+// 用瀏覽器實際字型渲染引擎量測「最大數字字元寬度」(MDW，Excel欄寬換算像素公式
+// 需要的關鍵參數)，直接量測工作簿實際使用的字型，不猜測任何固定字型的數值。
+function measureMaxDigitWidthPx(fontName, fontSizePt){
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const fontSizePx = fontSizePt * 96 / 72; // Excel欄寬計算的基準DPI固定是96
+  ctx.font = `${fontSizePx}px "${fontName}"`;
+  let maxWidth = 0;
+  for(let d = 0; d <= 9; d++){
+    const w = ctx.measureText(String(d)).width;
+    if(w > maxWidth) maxWidth = w;
+  }
+  if(maxWidth <= 0){
+    throw new Error(`無法量測字型「${fontName}」的數字寬度，瀏覽器可能不支援這個字型，為避免猜測性修改已停止產生，請回報這個訊息。`);
+  }
+  return maxWidth;
+}
+
+// Excel欄寬（字元單位）轉像素，公式依 ECMA-376 Part1 §18.3.1.13 標準換算
+// （這裡兩處都是Truncate，不是Round——用Round會讓換算結果比真實值多算約
+// 1個像素，在邊界值時足以讓算出來的容量多1欄）：
+// pixels = Truncate(((256*width + Truncate(128/MDW)) / 256) * MDW)
+function excelColumnWidthToPixels(width, mdwPx){
+  return Math.trunc(((256 * width + Math.trunc(128 / mdwPx)) / 256) * mdwPx);
+}
+
+function getColWidth(sheetXml, colIdx1based){
+  const colsBlock = sheetXml.match(/<cols>([\s\S]*?)<\/cols>/);
+  if(!colsBlock) return null;
+  const entries = colsBlock[1].match(/<col [^/]*\/>/g) || [];
+  for(const entry of entries){
+    const minM = entry.match(/min="(\d+)"/), maxM = entry.match(/max="(\d+)"/);
+    if(!minM || !maxM) continue;
+    const min = parseInt(minM[1], 10), max = parseInt(maxM[1], 10);
+    if(colIdx1based >= min && colIdx1based <= max){
+      const w = entry.match(/width="([\d.]+)"/);
+      return w ? parseFloat(w[1]) : null;
+    }
+  }
+  return null;
+}
+
+// 【核心】依範本實際紙張大小/方向/邊界/縮放比例/欄寬，計算一頁實際能容納
+// 幾個學生欄位，完全不寫死頁面容量常數。MDW用瀏覽器實際字型渲染量測，
+// 已用GDI+對照驗證過：套用這份範本目前的版面設定，算出來的結果剛好是13，
+// 跟人工在Excel裡實測的結果一致。
+function detectPageStudentCapacity(sheetXml, stylesXml){
+  const pageSetupMatch = sheetXml.match(/<pageSetup([^/]*)\/>/);
+  if(!pageSetupMatch) throw new Error("範本結構與預期不符（找不到pageSetup），為避免猜測性修改已停止產生，請回報這個訊息。");
+  const psAttrs = pageSetupMatch[1];
+  const paperSize = parseInt((psAttrs.match(/paperSize="(\d+)"/) || [])[1] || "1", 10);
+  const scale = parseInt((psAttrs.match(/scale="(\d+)"/) || [])[1] || "100", 10);
+  const orientation = (psAttrs.match(/orientation="(\w+)"/) || [])[1] || "portrait";
+  const fitToWidth = parseInt((psAttrs.match(/fitToWidth="(\d+)"/) || [])[1] || "0", 10);
+  if(fitToWidth !== 0){
+    throw new Error("範本pageSetup使用fitToWidth自動縮放版面，目前偵測邏輯只支援固定scale百分比的情況，為避免猜測性修改已停止產生，請回報這個訊息。");
+  }
+  if(!(paperSize in PROGRESS_PAPER_SIZES_IN)){
+    throw new Error(`不支援的紙張尺寸（paperSize=${paperSize}），為避免猜測性修改已停止產生，請回報這個訊息。`);
+  }
+
+  const marginsMatch = sheetXml.match(/<pageMargins([^/]*)\/>/);
+  if(!marginsMatch) throw new Error("範本結構與預期不符（找不到pageMargins），為避免猜測性修改已停止產生，請回報這個訊息。");
+  const left = parseFloat((marginsMatch[1].match(/left="([\d.eE+-]+)"/) || [])[1] || "0.75");
+  const right = parseFloat((marginsMatch[1].match(/right="([\d.eE+-]+)"/) || [])[1] || "0.75");
+
+  let [pw, ph] = PROGRESS_PAPER_SIZES_IN[paperSize];
+  if(orientation === "landscape"){ const t = pw; pw = ph; ph = t; }
+  const printableWidthIn = pw - left - right;
+  const naturalPrintableWidthIn = printableWidthIn / (scale / 100);
+
+  const widthA = getColWidth(sheetXml, 1);
+  const widthB = getColWidth(sheetXml, 2);
+  const widthC = getColWidth(sheetXml, 3);
+  const widthStudent = getColWidth(sheetXml, 4); // D欄，第一個學生欄位的代表寬度
+  if([widthA, widthB, widthC, widthStudent].some(w => w == null)){
+    throw new Error("範本<cols>缺少A/B/C/D欄寬定義，為避免猜測性修改已停止產生，請回報這個訊息。");
+  }
+
+  const defaultFont = getWorkbookDefaultFont(stylesXml);
+  const mdwPx = measureMaxDigitWidthPx(defaultFont.name, defaultFont.sz);
+  const widthToInches = (width) => excelColumnWidthToPixels(width, mdwPx) / 96;
+
+  const fixedWidthIn = widthToInches(widthA) + widthToInches(widthB) + widthToInches(widthC);
+  const studentColWidthIn = widthToInches(widthStudent);
+  const remainingIn = naturalPrintableWidthIn - fixedWidthIn;
+  const capacity = Math.floor(remainingIn / studentColWidthIn + 1e-9); // 極小容許值，只防浮點表示誤差，不是湊數字
+  if(capacity < 1){
+    throw new Error("依範本版面計算出的頁面學生欄位容量小於1，範本版面可能無法容納任何學生欄位，請回報這個訊息。");
+  }
+  return capacity;
+}
+
+// ---- 中英文分離 rich text（Phase 1.2）----
+// 中文（含全形符號/CJK標點）→ 標楷體；英文字母、數字、半形符號 → Times New Roman。
+// 只切字型家族，字級/粗體/顏色一律沿用該儲存格原本的字型設定，不會被改掉。
+const PROGRESS_HAN_FONT = "標楷體";
+const PROGRESS_LATIN_FONT = "Times New Roman";
+
+function classifyChar(ch){
+  const code = ch.codePointAt(0);
+  const isCjk = (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF) ||
+                (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF);
+  return isCjk ? "cjk" : "latin";
+}
+function splitIntoScriptRuns(text){
+  const runs = [];
+  let current = "", currentType = null;
+  for(const ch of text){
+    const type = classifyChar(ch);
+    if(type === currentType){ current += ch; }
+    else{
+      if(current) runs.push({text: current, type: currentType});
+      current = ch; currentType = type;
+    }
+  }
+  if(current) runs.push({text: current, type: currentType});
+  return runs;
+}
+
+// 把 fonts / cellXfs 區塊拆成陣列（都在新增任何項目"之前"呼叫一次，之後只會
+// append在最後不影響既有索引，全程可以拿來查原始樣式的字級/粗體/顏色/borderId）
+function parseFontsList(stylesXml){
+  const block = stylesXml.match(/<fonts count="\d+"[^>]*>([\s\S]*?)<\/fonts>/);
+  if(!block) throw new Error("範本結構與預期不符（styles.xml找不到<fonts>），為避免猜測性修改已停止產生，請回報這個訊息。");
+  return block[1].match(/<font>[\s\S]*?<\/font>/g) || [];
+}
+function parseCellXfsList(stylesXml){
+  const block = stylesXml.match(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/);
+  if(!block) throw new Error("範本結構與預期不符（styles.xml找不到<cellXfs>），為避免猜測性修改已停止產生，請回報這個訊息。");
+  return block[1].match(/<xf [^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g) || [];
+}
+function getBorderIdFromXf(xfString){
+  const m = xfString.match(/borderId="(\d+)"/);
+  return m ? m[1] : "0";
+}
+// 讀出某個既有style目前的字級/是否粗體/顏色，供組rich text run時延用，
+// 確保「只統一字體家族」不會連帶改掉原本的字級、粗體、顏色。
+function getFontAttrsFromStyleId(styleId, xfList, fontsList){
+  const xf = xfList[parseInt(styleId, 10)] || "";
+  const fontIdMatch = xf.match(/fontId="(\d+)"/);
+  const font = fontsList[parseInt(fontIdMatch ? fontIdMatch[1] : "0", 10)] || "";
+  const szMatch = font.match(/sz val="([\d.]+)"/);
+  const colorMatch = font.match(/<color[^/]*\/>/);
+  return {
+    sz: szMatch ? szMatch[1] : "11",
+    bold: /<b\s*\/>/.test(font),
+    color: colorMatch ? colorMatch[0] : '<color theme="1"/>'
+  };
+}
+function buildRichTextRuns(text, fontAttrs){
+  return splitIntoScriptRuns(text).map(seg => {
+    const fontName = seg.type === "cjk" ? PROGRESS_HAN_FONT : PROGRESS_LATIN_FONT;
+    const family = seg.type === "cjk" ? "4" : "1";
+    const boldTag = fontAttrs.bold ? "<b/>" : "";
+    return `<r><rPr>${boldTag}<sz val="${fontAttrs.sz}"/>${fontAttrs.color}<rFont val="${fontName}"/><family val="${family}"/></rPr><t xml:space="preserve">${escapeXml(seg.text)}</t></r>`;
+  }).join("");
+}
+
+// 全域掃描：把 A/B/C 三個固定教材欄（含科目標題列）裡所有還是「純共用字串」的
+// 文字格轉成中英文分離的rich text；s=（border/對齊/numFmt）完全不變。
+// 範本裡少數儲存格本身已經是rich text（例如帶Wingdings 2符號的段考彙總列，
+// 見交接筆記），這些一律跳過不轉換，避免把裝飾符號覆寫成一般文字。
+// 修正：原本只處理 t="s"（共用字串）儲存格，但範本裡有些頁數是純數字儲存格
+// （例如"21"這種單一頁碼，沒有~符號，範本作者直接打數字，Excel存成沒有t=
+// 屬性的數字型別，不是共用字串），導致這幾筆頁數完全沒有被這個函式碰到，
+// 維持原本的字型（不是Times New Roman）。跟getAbText()/Phase2.1.1那次
+// 修正是同一個根因，這裡比照辦理：t="s"→查共用字串；t="inlineStr"→讀
+// <is><t>；其餘(含無t=屬性的數字)→直接讀<v>的原始文字，全部一視同仁送進
+// buildRichTextRuns()做中英文分離（純數字/範圍如"21"、"4~5"天然全部落在
+// 「非中文」分支，會統一輸出Times New Roman）。
+// Phase2.3-B：importantByRow是Map<列號, boolean>，只涵蓋
+// writeCurriculumRowsIntoSheet()寫過的教材資料列；不在map裡的列（標題列、
+// 表頭列）維持原本樣式推導出的粗體狀態，不受important影響。粗體是「疊加」
+// 在既有中英文字型分流之上——buildRichTextRuns()本來就會依CJK/Latin分別
+// 套用標楷體/Times New Roman，這裡只是把bold這個屬性換成important決定的
+// 值，rFont的選擇邏輯完全不變。
+// （wingdingsIndices保護邏輯已移除：Phase2.3-A之後，所有教材資料列在進到
+// 這個函式之前，都已經被writeCurriculumRowsIntoSheet()改寫成t="inlineStr"
+// 的全新文字，不會再是t="s"共用字串；唯一還會走t="s"分支的只剩標題列/
+// 表頭列，這些從未出現過Wingdings裝飾，保護邏輯已無實際作用。）
+function unifyCurriculumFonts(sheetXml, sharedStrings, xfList, fontsList, importantByRow){
+  return sheetXml.replace(/<c r="([ABC]\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g, (whole, ref) => {
+    const typeMatch = whole.match(/t="(\w+)"/);
+    const cellType = typeMatch ? typeMatch[1] : "n";
+    const styleMatch = whole.match(/s="(\d+)"/);
+    const styleId = styleMatch ? styleMatch[1] : "0";
+    let text = null;
+    if(cellType === "s"){
+      const vMatch = whole.match(/<v>(\d+)<\/v>/);
+      if(!vMatch) return whole;
+      const idx = parseInt(vMatch[1], 10);
+      text = sharedStrings[idx];
+    }else if(cellType === "inlineStr"){
+      const tMatch = whole.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+      text = tMatch ? tMatch[1] : null;
+    }else{
+      const vMatch = whole.match(/<v>([\s\S]*?)<\/v>/);
+      text = vMatch ? vMatch[1] : null;
+    }
+    if(!text) return whole;
+    const fontAttrs = getFontAttrsFromStyleId(styleId, xfList, fontsList);
+    const rowMatch = ref.match(/\d+/);
+    const row = rowMatch ? parseInt(rowMatch[0], 10) : null;
+    if(importantByRow && row !== null && importantByRow.has(row)){
+      fontAttrs.bold = importantByRow.get(row); // 教材資料列的粗體完全由important決定，不沿用範本原始粗體狀態
+    }
+    return `<c r="${ref}" s="${styleId}" t="inlineStr"><is>${buildRichTextRuns(text, fontAttrs)}</is></c>`;
+  });
+}
+
+// 全域掃描：移除「學生欄位區」（D欄以後）裡欄位序號超過 lastColIdx 的所有 <c> 元素。
+// Phase1.2下，lastColIdx永遠是「總頁數×14」的範圍終點，正常情況下不會真的刪到
+// 任何東西（頁面內的空白學生欄一律保留），這裡純粹作為防呆的最後一道防線。
+function trimStudentZoneBeyond(xml, lastColIdx){
+  return xml.replace(/<c r="([A-Z]+)(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g, (whole, colLetters) => {
+    const idx = colLetterToIndex(colLetters);
+    if(idx >= PROGRESS_STUDENT_ZONE_START_IDX && idx > lastColIdx) return "";
+    return whole;
+  });
+}
+
+// 跟seedCurriculumBlockRows()用的是同一條排除規則：這一列的A/B/C原始值
+// 全部是空的，代表這是範本裡純版面預留的空白列（例如自然科期中原本19個
+// 物理列裡有7列是這種空白列），不是真正的教材內容，因此CurriculumData
+// 沒有對應項目，寫回Excel時這些列也要跳過、完全不去動它們，才能讓
+// templateRows的數量正確對應到CurriculumData的筆數。
+function isBlankCurriculumRow(sheetXml, sharedStringsArr, row){
+  const unitRaw = getAbText(sheetXml, sharedStringsArr, `A${row}`);
+  const content = getAbText(sheetXml, sharedStringsArr, `B${row}`);
+  const pages = getAbText(sheetXml, sharedStringsArr, `C${row}`);
+  return !unitRaw && !content && !pages;
+}
+
+// ---- Phase 2.3-C：教材新增/刪除後，動態調整區塊的實體列數 ----
+//
+// 關鍵結構事實（已實際解壓範本XML驗證，見交接分析）：
+// 每個「期中/期末」區塊的物理列，由前到後分成三種角色：
+//   1. 一般教材列（ordinary）：A~P全部16欄樣式在同一區塊內完全一致（不論
+//      important與否，差異只在B欄fontId是否粗體，border/對齊/numFmt相同）
+//   2. 版面預留空白列（filler）：範本原始A/B/C三欄都是空的列（目前只有
+//      自然科期中有，共6列，不含收尾列本身），永遠不屬於CurriculumData，
+//      新增/刪除教材完全不會動到它們，只會隨著前面列數變化一起被重新編號
+//   3. 收尾列（closing）：一定是該區塊「物理上最後一列」，A~P全欄套用
+//      整個區塊裡獨一無二的樣式（thickBot=1 + 專屬border）。這一列採用
+//      「雙重身份」設計（使用者已確認）：樣式永遠是收尾樣式、永不被
+//      新增/刪除觸碰；但內容維持範本原本的行為──如果這個區塊沒有filler，
+//      CurriculumData最後一筆教材的內容就寫在這一列上（跟Phase2.3-A/B
+//      的行為完全一致）；如果CurriculumData為0筆且這個區塊沒有filler，
+//      則清空A~C，不然它會被誤判成有內容的教材列。
+//
+// 新增列一律插入在「一般教材列」與「filler/收尾列」的交界處，樣式來源固定
+// 是「這個區塊原始範本裡的第一個一般教材列」（使用者明確指定，不能用收尾
+// 列的樣式，也不能用刪除/新增動態過程中臨時產生的列）。
+// 刪除列一律從一般教材列的尾端刪，永遠不刪除filler或收尾列。
+
+// 擷取某一列在A~lastColIdx每一欄的樣式ID，以及列本身的spans/ht/
+// customHeight等屬性，作為新增列時的樣式複製來源。
+function captureRowStyleTemplate(sheetXml, rowNum, lastColIdx){
+  const rowMatch = sheetXml.match(new RegExp(`<row r="${rowNum}"([^>]*)>([\\s\\S]*?)</row>`));
+  if(!rowMatch) throw new Error(`找不到列${rowNum}，無法擷取樣式範本，請回報這個訊息。`);
+  const rowAttrs = rowMatch[1], rowBody = rowMatch[2];
+  const cells = [];
+  for(let idx = 0; idx <= lastColIdx; idx++){
+    const col = colLetter(idx);
+    const cellMatch = rowBody.match(new RegExp(`<c r="${col}${rowNum}" s="(\\d+)"`));
+    if(!cellMatch) throw new Error(`列${rowNum}的${col}欄缺少樣式定義，無法安全複製作為新增列樣式來源，請回報這個訊息。`);
+    cells.push({col, style: cellMatch[1]});
+  }
+  return {rowAttrs, cells};
+}
+
+// 把列號 >= fromRow 的所有 <row r=".."> 與 <c r="COL..">全部位移delta
+// （delta可正可負，但呼叫端必須確保這是「均勻」位移，即fromRow之後沒有
+// 任何列會被跳過不位移──插入新列時符合這個前提，因為插入點之後的東西
+// 整批一起往後移）。
+function shiftRowsUniform(sheetXml, fromRow, delta){
+  if(delta === 0) return sheetXml;
+  sheetXml = sheetXml.replace(/<row r="(\d+)"/g, (m, rNum) => {
+    const n = parseInt(rNum, 10);
+    return n >= fromRow ? `<row r="${n + delta}"` : m;
+  });
+  sheetXml = sheetXml.replace(/<c r="([A-Z]+)(\d+)"/g, (m, col, rNum) => {
+    const n = parseInt(rNum, 10);
+    return n >= fromRow ? `<c r="${col}${n + delta}"` : m;
+  });
+  return sheetXml;
+}
+
+// 在insertBeforeRow這個位置插入count個新列（樣式來自template），原本從
+// insertBeforeRow開始的所有列先整批往後位移count個位置讓出空間。
+function insertOrdinaryRows(sheetXml, insertBeforeRow, count, template){
+  if(count <= 0) return sheetXml;
+  sheetXml = shiftRowsUniform(sheetXml, insertBeforeRow, count);
+  const newRows = [];
+  for(let i = 0; i < count; i++){
+    const rn = insertBeforeRow + i;
+    const cellsXml = template.cells.map(c => `<c r="${c.col}${rn}" s="${c.style}"/>`).join("");
+    newRows.push(`<row r="${rn}"${template.rowAttrs}>${cellsXml}</row>`);
+  }
+  const anchorRow = insertBeforeRow + count;
+  const anchorMatch = sheetXml.match(new RegExp(`<row r="${anchorRow}"`));
+  if(!anchorMatch) throw new Error(`找不到插入錨點列${anchorRow}，無法安全插入新列，請回報這個訊息。`);
+  const pos = anchorMatch.index;
+  return sheetXml.slice(0, pos) + newRows.join("") + sheetXml.slice(pos);
+}
+
+// 整列刪除rowsToDelete（可以是不連續的列號，例如中間夾著自然科期中那種
+// 原本就存在、永遠不刪除的filler列），並把剩下的列正確往前補齊（每一列
+// 位移量＝有幾個被刪除的列號比它小，不是統一位移量，因為刪除範圍內可能
+// 夾著沒被刪除、要保留原樣往前移動的filler列）。
+function deleteRowsCompact(sheetXml, rowsToDelete){
+  if(rowsToDelete.length === 0) return sheetXml;
+  const sortedDel = [...rowsToDelete].sort((a, b) => a - b);
+  for(const rn of sortedDel){
+    sheetXml = sheetXml.replace(new RegExp(`<row r="${rn}"[^>]*?(?:/>|>[\\s\\S]*?</row>)`), "");
+  }
+  const minDel = sortedDel[0];
+  function shiftFor(n){
+    let c = 0;
+    for(const d of sortedDel){ if(d < n) c++; else break; }
+    return c;
+  }
+  sheetXml = sheetXml.replace(/<row r="(\d+)"/g, (m, rNum) => {
+    const n = parseInt(rNum, 10);
+    if(n < minDel) return m;
+    const s = shiftFor(n);
+    return s > 0 ? `<row r="${n - s}"` : m;
+  });
+  sheetXml = sheetXml.replace(/<c r="([A-Z]+)(\d+)"/g, (m, col, rNum) => {
+    const n = parseInt(rNum, 10);
+    if(n < minDel) return m;
+    const s = shiftFor(n);
+    return s > 0 ? `<c r="${col}${n - s}"` : m;
+  });
+  return sheetXml;
+}
+
+// 把A~C文字清空（樣式s=完全不動）。用在：(1)沒有filler的區塊，
+// CurriculumData為0筆時的收尾列；(2)有filler的區塊，「內容列」與「收尾列」
+// 之間的filler緩衝列——這些列resize前可能還帶著範本原始文字（見
+// resizeBlockRows()的filler位置修正說明），寫回CurriculumData前必須先
+// 清乾淨，否則isBlankCurriculumRow之後會誤判、或殘留舊教材文字。
+function clearCurriculumRowContent(sheetXml, row){
+  for(const col of ["A", "B", "C"]){
+    const style = getCellStyle(sheetXml, `${col}${row}`);
+    sheetXml = replaceCellRaw(sheetXml, `${col}${row}`, `<c r="${col}${row}" s="${style}"/>`);
+  }
+  return sheetXml;
+}
+
+function updateDimensionRow(sheetXml, delta){
+  let count = 0;
+  const newXml = sheetXml.replace(/<dimension ref="A1:([A-Z]+)(\d+)"\/>/, (m, col, row) => {
+    count++;
+    return `<dimension ref="A1:${col}${parseInt(row, 10) + delta}"/>`;
+  });
+  if(count !== 1) throw new Error("dimension格式跟預期不同，無法更新列號，請回報這個訊息。");
+  return newXml;
+}
+
+function updateRowBreaksId(sheetXml, delta){
+  let count = 0;
+  const newXml = sheetXml.replace(/<brk id="(\d+)"/, (m, id) => {
+    count++;
+    return `<brk id="${parseInt(id, 10) + delta}"`;
+  });
+  if(count !== 1) throw new Error("rowBreaks格式跟預期不同，無法更新列號，請回報這個訊息。");
+  return newXml;
+}
+
+// 把headerRowLower~headerRowUpper之間（headerRowUpper為null代表到sheet
+// 結尾）的區塊，實體列數resize成跟curriculumRows一致。回傳
+// {sheetXml, delta, contentRows}。
+//
+// 修正版（Phase2.3-C修正）：filler「數量」是固定的，但filler「位置」不再
+// 位置保留（不再堅持每一個filler列永遠待在範本原始的那個實體列號）。根因
+// 是自然科期中原本有一個filler列(row8)夾在「活動3總複習」跟「第二單元」
+// 中間，如果照原始位置保留，教材內容之間就會憑空多出一個視覺上的空白列，
+// 跟CurriculumData實際筆數對不上（人工驗收抓到的bug）。
+//
+// body列（區塊內扣掉收尾列以外的所有列）在這個區塊裡A~P樣式完全一致
+// （已實際解壓範本驗證：filler列的style ID跟一般教材列相同，差異只在B欄
+// 是否為粗體字型，而字型/粗體本來就是Phase2.3-B用rich text override處理，
+// 不吃儲存格原始樣式），所以body列彼此可以互換、不需要位置對應。因此改成
+// 「數量保留」策略：filler列的「數量」(fillerCount)從範本原始結構量一次
+// 快照下來，resize後一律把CurriculumData的n筆內容依序填進body區「最前面」
+// 的n個實體列（完全連續、不會有洞），filler緩衝(數量固定為fillerCount)
+// 永遠被推到body區「最後面」、緊接在收尾列之前，不會再卡在教材內容中間。
+//
+// 沒有filler的區塊（國/數/社/自期末目前都是這樣）行為完全不變：收尾列
+// 維持雙重身份，CurriculumData最後一筆教材內容寫在收尾列上。
+//
+// contentRows是resize後、CurriculumData應該依序寫入的實體列號陣列，長度
+// 一定等於curriculumRows.length。這裡刻意直接用「resize前的bodyRows
+// 位置+delta」精確計算，不能用isBlankCurriculumRow重新掃描resize後的
+// sheetXml來反推──因為新插入的列在填入內容之前本來就是空白的，用內容
+// 判斷會被誤認成filler列而漏算，這是實作過程中踩到的真實bug。
+function resizeBlockRows(sheetXml, headerRowLower, headerRowUpper, curriculumRows, nativeLastColIdx, blockLabel, updateRowBreak, sharedStrings){
+  const zoneRows = findStudentZoneRows(sheetXml);
+  const blockRows = (headerRowUpper !== null
+    ? zoneRows.filter(r => r > headerRowLower && r < headerRowUpper)
+    : zoneRows.filter(r => r > headerRowLower)
+  ).sort((a, b) => a - b);
+  if(blockRows.length === 0){
+    throw new Error(`${blockLabel}: 區塊內找不到任何資料列，為避免猜測性修改已停止產生，請回報這個訊息。`);
+  }
+
+  const closingRow = blockRows[blockRows.length - 1];
+  const bodyRows = blockRows.slice(0, -1);
+
+  // 快照：只在resize前的當下，用範本原始A/B/C是否全空判斷哪些body列是
+  // filler；之後只沿用這個「數量」，不再依賴這些列的原始位置。
+  const fillerRowsSnapshot = bodyRows.filter(r => isBlankCurriculumRow(sheetXml, sharedStrings, r));
+  const fillerCount = fillerRowsSnapshot.length;
+  const fillerSet = new Set(fillerRowsSnapshot);
+  const ordinaryRowsSnapshot = bodyRows.filter(r => !fillerSet.has(r));
+  const hasFiller = fillerCount > 0;
+
+  const n = curriculumRows.length;
+  const targetBody = hasFiller ? (n + fillerCount) : Math.max(n - 1, 0);
+  const delta = targetBody - bodyRows.length;
+
+  let newBodyRows;
+  if(delta > 0){
+    if(ordinaryRowsSnapshot.length === 0){
+      throw new Error(`${blockLabel}: 範本裡找不到任何一般教材列可作為新增列的樣式來源，無法安全新增，請回報這個訊息。`);
+    }
+    const template = captureRowStyleTemplate(sheetXml, ordinaryRowsSnapshot[0], nativeLastColIdx);
+    const insertBefore = bodyRows.length > 0 ? (Math.max(...bodyRows) + 1) : (headerRowLower + 1);
+    sheetXml = insertOrdinaryRows(sheetXml, insertBefore, delta, template);
+    newBodyRows = bodyRows.concat(Array.from({length: delta}, (_, i) => insertBefore + i));
+  }else if(delta < 0){
+    const toDelete = [...bodyRows].sort((a, b) => a - b).slice(delta);
+    sheetXml = deleteRowsCompact(sheetXml, toDelete);
+    newBodyRows = bodyRows.slice(0, delta);
+  }else{
+    newBodyRows = bodyRows.slice();
+  }
+
+  if(delta !== 0){
+    sheetXml = updateDimensionRow(sheetXml, delta);
+    if(updateRowBreak) sheetXml = updateRowBreaksId(sheetXml, delta);
+  }
+
+  const newClosingRow = closingRow + delta;
+
+  let contentRows;
+  if(hasFiller){
+    contentRows = newBodyRows.slice(0, n);
+    const fillerPadRows = newBodyRows.slice(n);
+    for(const r of fillerPadRows){
+      sheetXml = clearCurriculumRowContent(sheetXml, r);
+    }
+    // 收尾列在有filler的區塊裡定義上永遠不承載CurriculumData內容，不論範本
+    // 原始內容是否剛好是空的，都明確清空，避免依賴巧合。
+    sheetXml = clearCurriculumRowContent(sheetXml, newClosingRow);
+  }else{
+    contentRows = newBodyRows.concat(n >= 1 ? [newClosingRow] : []);
+    if(n === 0){
+      sheetXml = clearCurriculumRowContent(sheetXml, newClosingRow);
+    }
+  }
+
+  return {sheetXml, delta, contentRows};
+}
+
+// Phase2.3-A：教材內容(單元/內容/頁數)一律以CurriculumData為準寫入，不再
+// 直接沿用範本原始A/B/C內容。單元名稱沿用範本原本的視覺慣例：跟上一列同
+// 單元就在A欄留空，不會把單元名稱重複填滿整欄。
+// Phase2.3-C修正：ensureWrapStyle是選填參數，把A~C欄的樣式換成wrapText版本
+// （不再用shrinkToFit硬縮小字級），沒有傳入時維持原始樣式不變（例如給其他
+// 呼叫端／測試情境使用時可以不受影響）。
+function writeCurriculumRowsIntoSheet(sheetXml, templateRows, curriculumRows, subject, term, ensureWrapStyle){
+  if(templateRows.length !== curriculumRows.length){
+    throw new Error(`${subject}科目${term}的教材列數（${curriculumRows.length}筆）跟resize後的Excel實體列數（${templateRows.length}列）不一致，這是resizeBlockRows()應該保證一致的內部不變量，觸發代表resize邏輯本身有錯誤，請回報這個訊息。`);
+  }
+  let prevUnit = null;
+  for(let i = 0; i < templateRows.length; i++){
+    const row = templateRows[i];
+    const curRow = curriculumRows[i];
+    const unitText = toCurriculumDisplayText(curRow.unit);
+    const displayUnit = (unitText === prevUnit) ? "" : unitText;
+    prevUnit = unitText;
+    const contentText = toCurriculumDisplayText(curRow.content);
+    const pagesText = toCurriculumDisplayText(curRow.pages);
+
+    let aStyle = getCellStyle(sheetXml, `A${row}`);
+    let bStyle = getCellStyle(sheetXml, `B${row}`);
+    let cStyle = getCellStyle(sheetXml, `C${row}`);
+    if(ensureWrapStyle){
+      aStyle = ensureWrapStyle(aStyle);
+      bStyle = ensureWrapStyle(bStyle);
+      cStyle = ensureWrapStyle(cStyle);
+    }
+    sheetXml = replaceCellRaw(sheetXml, `A${row}`, displayUnit
+      ? `<c r="A${row}" s="${aStyle}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(displayUnit)}</t></is></c>`
+      : `<c r="A${row}" s="${aStyle}"/>`);
+    sheetXml = replaceCellRaw(sheetXml, `B${row}`, contentText
+      ? `<c r="B${row}" s="${bStyle}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(contentText)}</t></is></c>`
+      : `<c r="B${row}" s="${bStyle}"/>`);
+    sheetXml = replaceCellRaw(sheetXml, `C${row}`, pagesText
+      ? `<c r="C${row}" s="${cStyle}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(pagesText)}</t></is></c>`
+      : `<c r="C${row}" s="${cStyle}"/>`);
+  }
+  return sheetXml;
+}
+
+async function generateProgressReport(names){
+  const N = names.length;
+  await ensureCurriculumLoaded(); // 確保CurriculumData存在（含首次使用時的seed），不管老師有沒有先開過教材管理分頁
+
+  const resp = await fetch(encodeURI(PROGRESS_TEMPLATE_PATH));
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_進度追蹤表.xlsx`);
+  const buf = await resp.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+
+  const ssFile = zip.file(PROGRESS_SHARED_STRINGS_PATH);
+  const wbFile = zip.file(PROGRESS_WORKBOOK_PATH);
+  const stylesFile = zip.file(PROGRESS_STYLES_PATH);
+  if(!ssFile || !wbFile || !stylesFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+  const ssXmlRaw = await ssFile.async("string");
+  const sharedStrings = parseSharedStrings(ssXmlRaw);
+  let wbXml = await wbFile.async("string");
+  let stylesXml = await stylesFile.async("string");
+
+  const xfList = parseCellXfsList(stylesXml);       // 樣式對照表，全程只讀，索引在後續新增中保持有效
+  const fontsList = parseFontsList(stylesXml);
+
+  // 先把4個sheet的原始XML都讀出來，才能在填值之前，先依範本實際版面
+  // 動態算出「範本現成D欄以後有幾格」跟「一頁實際能放幾個學生欄位」，
+  // 兩者都不是寫死的常數（見Phase1.3修正說明）。
+  const originalSheetXmls = {};
+  for(const sheetPath of PROGRESS_SHEET_PATHS){
+    const sheetFile = zip.file(sheetPath);
+    if(!sheetFile) throw new Error(`範本結構與預期不符：找不到 ${sheetPath}，為避免猜測性修改已停止產生，請回報這個訊息。`);
+    originalSheetXmls[sheetPath] = await sheetFile.async("string");
+  }
+
+  const firstSheetXml = originalSheetXmls[PROGRESS_SHEET_PATHS[0]];
+  const firstZoneRows = findStudentZoneRows(firstSheetXml);
+  const firstHeaderRow = firstZoneRows.find(r => isHeaderRow(firstSheetXml, sharedStrings, r));
+  if(firstHeaderRow === undefined){
+    throw new Error("範本結構與預期不符（第1個sheet找不到任何表頭列），為避免猜測性修改已停止產生，請回報這個訊息。");
+  }
+  const nativeLastColIdx = detectNativeLastColIdx(firstSheetXml, firstHeaderRow);
+  const nativeLastCol = colLetter(nativeLastColIdx);
+
+  // 一頁能放幾個學生欄位：依4個sheet各自的版面設定分別算一次，取「最小值」
+  // 當作統一容量，確保每個sheet實際列印都不會超版（範本4個sheet的scale不
+  // 完全相同：93/93/92/90，理論上算出的容量可能不同，用最保守的那個）。
+  const pageCapacity = Math.min(...PROGRESS_SHEET_PATHS.map(p => detectPageStudentCapacity(originalSheetXmls[p], stylesXml)));
+
+  const numPages = Math.max(1, Math.ceil(N / pageCapacity));
+  const totalSlots = numPages * pageCapacity; // 每頁固定pageCapacity個學生欄位，不足補空白但不刪除
+  const finalColIdx = PROGRESS_STUDENT_ZONE_START_IDX + totalSlots - 1;
+  const finalCol = colLetter(finalColIdx);
+
+  // 範本原本「收尾欄」（P欄）的對齊設定漏了水平置中（跟一般欄不一致），這裡只修正
+  // 對齊，不動字型——字型統一交給上面的rich text處理，兩件事分開處理，互不影響。
+  const centeredStyleCache = new Map(); // key: 原始styleId, value: 修正後的styleId
+  function ensureCenteredStyle(originalStyleId){
+    const xf = xfList[parseInt(originalStyleId, 10)] || "";
+    if(/horizontal="center"/.test(xf) && /vertical="center"/.test(xf)) return originalStyleId;
+    if(centeredStyleCache.has(originalStyleId)) return centeredStyleCache.get(originalStyleId);
+    const borderId = getBorderIdFromXf(xf);
+    const fontIdMatch = xf.match(/fontId="(\d+)"/);
+    const fontId = fontIdMatch ? fontIdMatch[1] : "0";
+    const countMatch = stylesXml.match(/<cellXfs count="(\d+)">/);
+    const newIdx = countMatch[1];
+    const newXf = `<xf numFmtId="0" fontId="${fontId}" fillId="0" borderId="${borderId}" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>`;
+    stylesXml = stylesXml.replace(/<cellXfs count="(\d+)">/, (m, n) => `<cellXfs count="${+n + 1}">`);
+    stylesXml = stylesXml.replace("</cellXfs>", newXf + "</cellXfs>");
+    // 必須同步push到xfList，理由見ensureWrapStyle()的說明——這裡雖然自己
+    // 回傳的styleId不會被拿去查xfList，但如果不push，xfList的長度會落後
+    // stylesXml實際的cellXfs數量，後面ensureWrapStyle()算newIdx時就會跟
+    // xfList真正的index對不上，變成真正的bug根因（實作過程中踩到、已修正）。
+    xfList.push(newXf);
+    centeredStyleCache.set(originalStyleId, newIdx);
+    return newIdx;
+  }
+
+  // Phase2.3-C修正：教材A~C欄改成自動換行（wrapText），不要再靠shrinkToFit
+  // 硬把長文字縮小成很難閱讀的字級。跟ensureCenteredStyle同一個模式：不直接
+  // 修改既有樣式（同一個styleId可能被其他儲存格共用），而是複製出一份新的
+  // cellXfs項目，只把alignment從shrinkToFit換成wrapText，其餘（border、
+  // fontId、numFmt、horizontal/vertical對齊）完全保留原樣。
+  const wrapStyleCache = new Map(); // key: 原始styleId, value: 換行版styleId
+  function ensureWrapStyle(originalStyleId){
+    const xf = xfList[parseInt(originalStyleId, 10)] || "";
+    if(/wrapText="1"/.test(xf) && !/shrinkToFit="1"/.test(xf)) return originalStyleId;
+    if(wrapStyleCache.has(originalStyleId)) return wrapStyleCache.get(originalStyleId);
+    const borderId = getBorderIdFromXf(xf);
+    const fontIdMatch = xf.match(/fontId="(\d+)"/);
+    const fontId = fontIdMatch ? fontIdMatch[1] : "0";
+    const numFmtMatch = xf.match(/numFmtId="(\d+)"/);
+    const numFmtId = numFmtMatch ? numFmtMatch[1] : "0";
+    const fillIdMatch = xf.match(/fillId="(\d+)"/);
+    const fillId = fillIdMatch ? fillIdMatch[1] : "0";
+    const horizontalMatch = xf.match(/horizontal="(\w+)"/);
+    const horizontalAttr = horizontalMatch ? ` horizontal="${horizontalMatch[1]}"` : "";
+    const verticalMatch = xf.match(/vertical="(\w+)"/);
+    const verticalAttr = ` vertical="${verticalMatch ? verticalMatch[1] : "center"}"`;
+    const countMatch = stylesXml.match(/<cellXfs count="(\d+)">/);
+    const newIdx = countMatch[1];
+    const newXf = `<xf numFmtId="${numFmtId}" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment${horizontalAttr}${verticalAttr} wrapText="1"/></xf>`;
+    stylesXml = stylesXml.replace(/<cellXfs count="(\d+)">/, (m, n) => `<cellXfs count="${+n + 1}">`);
+    stylesXml = stylesXml.replace("</cellXfs>", newXf + "</cellXfs>");
+    // xfList是最上面解析stylesXml「當下那一刻」的快照，之後新建立的wrap樣式
+    // 不會自動出現在裡面；但這個函式回傳的styleId後續會被unifyCurriculumFonts()
+    // 透過getFontAttrsFromStyleId()以index查xfList，所以這裡必須同步push，
+    // 不然會存取超出陣列範圍（實作過程中踩到的真實bug：ensureCenteredStyle()
+    // 先前也沒有同步更新xfList，導致newIdx跟xfList實際長度悄悄脫鉤）。
+    xfList.push(newXf);
+    wrapStyleCache.set(originalStyleId, newIdx);
+    return newIdx;
+  }
+
+  // 教材列的row本身也要拿掉customHeight，改用Excel開檔時依實際內容（含換行
+  // 後的行數）自動計算高度，不然wrapText即使生效，超出原本ht固定高度的
+  // 第二行文字還是會被視覺裁切、實際上等於變相截斷內容。只套用在教材區域
+  // 本身的row（表頭列/其他版面列不動，避免影響D~P學生欄位版面）。
+  function enableRowAutoHeight(sheetXml, rowNum){
+    return sheetXml.replace(new RegExp(`<row r="${rowNum}"([^>]*)>`), (m, attrs) => {
+      return `<row r="${rowNum}"${attrs.replace(/\s*customHeight="1"/, "")}>`;
+    });
+  }
+
+  for(let sheetIdx = 0; sheetIdx < PROGRESS_SHEET_PATHS.length; sheetIdx++){
+    const sheetPath = PROGRESS_SHEET_PATHS[sheetIdx];
+    let originalSheetXml = originalSheetXmls[sheetPath];
+    const subj = CURRICULUM_SUBJECTS[sheetIdx];
+    const midBlock = getCurriculumBlock(subj, "期中");
+    const endBlock = getCurriculumBlock(subj, "期末");
+    if(!midBlock || !endBlock){
+      throw new Error(`找不到教材資料（${subj}科目的期中/期末），請先到「教材管理」分頁確認資料存在後再產生進度追蹤表。`);
+    }
+
+    // Phase2.3-C：先把期中/期末兩個區塊的實體列數resize成跟CurriculumData
+    // 一致，再進入既有Phase1.3~2.3B的流程（resize完成後，originalSheetXml
+    // 重新指向resize後的版本，讓後面所有讀取樣式/列號的邏輯都在正確的
+    // 新版面上運作，不需要再改動下面既有的程式碼）。
+    const zoneRows0 = findStudentZoneRows(originalSheetXml);
+    const headerRows0 = zoneRows0.filter(r => isHeaderRow(originalSheetXml, sharedStrings, r)).sort((a, b) => a - b);
+    if(headerRows0.length !== 2){
+      throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet偵測到${headerRows0.length}個表頭列，預期應為2個「期中/期末」表頭列），為避免猜測性修改已停止產生，請回報這個訊息。`);
+    }
+    const [h1_0, h2_0] = headerRows0;
+
+    const midResize = resizeBlockRows(originalSheetXml, h1_0, h2_0, midBlock.rows, nativeLastColIdx, `${subj}期中`, true, sharedStrings);
+    const endResize = resizeBlockRows(midResize.sheetXml, h2_0 + midResize.delta, null, endBlock.rows, nativeLastColIdx, `${subj}期末`, false, sharedStrings);
+    const totalDelta = midResize.delta + endResize.delta;
+
+    originalSheetXml = endResize.sheetXml;
+    let sheetXml = originalSheetXml;
+
+    const zoneRows = findStudentZoneRows(originalSheetXml);
+    const headerRows = zoneRows.filter(r => isHeaderRow(originalSheetXml, sharedStrings, r));
+    if(headerRows.length !== 2){
+      throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet resize後偵測到${headerRows.length}個表頭列，預期應為2個，代表resizeBlockRows()本身有錯誤，請回報這個訊息。`);
+    }
+
+    // Phase2.3-A：教材內容改以CurriculumData為準寫入（單元/內容/頁數），
+    // 不再直接沿用範本原始A/B/C。學生欄位（D欄以後）完全不受影響，維持
+    // Phase1.3既有邏輯。midDataRows/endDataRows直接沿用resizeBlockRows()
+    // 回傳的contentRows，不能用isBlankCurriculumRow重新掃描——resize後、
+    // 內容尚未寫入前，新插入的列跟真正的filler列在內容上是分不出來的
+    // （都是空的），這是實作過程中踩到的真實bug，修正後改成這樣。
+    const midDataRows = midResize.contentRows;
+    const endDataRows = endResize.contentRows;
+    sheetXml = writeCurriculumRowsIntoSheet(sheetXml, midDataRows, midBlock.rows, subj, "期中", ensureWrapStyle);
+    sheetXml = writeCurriculumRowsIntoSheet(sheetXml, endDataRows, endBlock.rows, subj, "期末", ensureWrapStyle);
+
+    // Phase2.3-C修正：教材區域（期中/期末兩個區塊，含filler緩衝列與收尾列）
+    // 全部拿掉customHeight，讓Excel開檔時依實際內容（含wrapText換行後的
+    // 行數）自動決定列高，避免長文字換行後被固定列高視覺裁切。只處理A~C
+    // 欄所在的教材row本身，不影響D~P學生欄位既有的填值/框線邏輯。
+    const [wrapH1, wrapH2] = headerRows;
+    for(const row of zoneRows.filter(r => r > wrapH1 && r < wrapH2)){
+      sheetXml = enableRowAutoHeight(sheetXml, row);
+    }
+    for(const row of zoneRows.filter(r => r > wrapH2)){
+      sheetXml = enableRowAutoHeight(sheetXml, row);
+    }
+
+    // Phase2.3-B：important是否粗體，完全由CurriculumData決定，跟physical
+    // row（列號）綁定成一個map，等unifyCurriculumFonts()處理A/B/C欄時直接
+    // 查表覆蓋掉樣式推導出的粗體狀態。row長度已在writeCurriculumRowsIntoSheet()
+    // 裡驗證過跟curriculumRows一致，這裡可以直接用index對應zip。
+    const importantByRow = new Map();
+    midDataRows.forEach((row, i) => importantByRow.set(row, !!midBlock.rows[i].important));
+    endDataRows.forEach((row, i) => importantByRow.set(row, !!endBlock.rows[i].important));
+
+    for(const row of zoneRows){
+      // 確認範本現成的D~{nativeLastCol}欄在原始資料裡確實都存在，不存在就停止並回報，不自行猜測
+      for(let idx = PROGRESS_STUDENT_ZONE_START_IDX; idx <= nativeLastColIdx; idx++){
+        const ref = colLetter(idx) + row;
+        if(!new RegExp(`<c r="${ref}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`).test(originalSheetXml)){
+          throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet第${row}列缺少${ref}儲存格），為避免猜測性修改已停止產生，請回報這個訊息。`);
+        }
+      }
+
+      const normalStyle = getCellStyle(originalSheetXml, `D${row}`);
+      const closingStyle = ensureCenteredStyle(getCellStyle(originalSheetXml, `${nativeLastCol}${row}`));
+      const isHeader = headerRows.includes(row);
+      // 表頭列姓名的字級/粗體/顏色統一以「一般欄」為準，不再像範本原本那樣
+      // 「最後一欄」用不同字級（這是Phase1.1發現的bug根因，這次徹底處理掉）
+      const headerFontAttrs = isHeader ? getFontAttrsFromStyleId(normalStyle, xfList, fontsList) : null;
+
+      for(let slot = 0; slot < totalSlots; slot++){
+        const idx = slot + PROGRESS_STUDENT_ZONE_START_IDX;
+        const col = colLetter(idx);
+        const posInPage = slot % pageCapacity;
+        const isPageEnd = (posInPage === pageCapacity - 1); // 粗框跟「該頁最後一個學生欄位」綁定，不跟最後一位有姓名的學生綁定
+        const borderStyle = isPageEnd ? closingStyle : normalStyle;
+        const ref = col + row;
+        let newCellXml;
+        if(isHeader && slot < N){
+          newCellXml = `<c r="${ref}" s="${borderStyle}" t="inlineStr"><is>${buildRichTextRuns(names[slot], headerFontAttrs)}</is></c>`;
+        }else{
+          newCellXml = `<c r="${ref}" s="${borderStyle}"/>`; // 沒有學生的欄位：保留儲存格與格線，只是空白
+        }
+        if(idx <= nativeLastColIdx){
+          sheetXml = replaceCellRaw(sheetXml, ref, newCellXml);
+        }else{
+          sheetXml = insertCellIntoRow(sheetXml, row, newCellXml);
+        }
+      }
+    }
+
+    // 教材固定欄（單元/內容/頁數/科目標題）統一中英文字體
+    sheetXml = unifyCurriculumFonts(sheetXml, sharedStrings, xfList, fontsList, importantByRow);
+
+    // 防呆用的全域清除（正常情況下這裡不會真的刪到任何東西，因為每頁固定
+    // pageCapacity個學生欄位已經涵蓋所有需要保留的空白學生欄位）
+    sheetXml = trimStudentZoneBeyond(sheetXml, finalColIdx);
+
+    // 更新 dimension（只改欄位字母，列號沿用範本原本的值；範本原本結尾欄字母
+    // 是動態偵測出的nativeLastCol，不寫死"P"）
+    const dimensionRe = new RegExp(`<dimension ref="A1:${nativeLastCol}(\\d+)"/>`);
+    if(!dimensionRe.test(sheetXml)){
+      throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet的dimension格式跟預期不同），為避免猜測性修改已停止產生，請回報這個訊息。`);
+    }
+    sheetXml = sheetXml.replace(dimensionRe, (m, lastRow) => `<dimension ref="A1:${finalCol}${lastRow}"/>`);
+
+    // 延伸 <cols> 最後一段的 max 屬性，讓新增的學生欄位維持跟原本欄位一致的欄寬
+    if(!/<col min="14" max="14"[^/]*\/>/.test(sheetXml)){
+      throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet的cols定義跟預期不同），為避免猜測性修改已停止產生，請回報這個訊息。`);
+    }
+    sheetXml = sheetXml.replace(/<col min="14" max="14"([^/]*)\/>/, (m, attrs) => `<col min="14" max="${finalColIdx+1}"${attrs}/>`);
+
+    // 超過一頁：加manual column break分頁，分頁點固定在每頁的最後一個學生欄位之後
+    if(numPages > 1){
+      if(!/<\/rowBreaks>/.test(sheetXml)){
+        throw new Error(`範本結構與預期不符（第${sheetIdx+1}個sheet找不到rowBreaks），為避免猜測性修改已停止產生，請回報這個訊息。`);
+      }
+      const breakCols = [];
+      for(let p = 1; p < numPages; p++) breakCols.push(PROGRESS_STUDENT_ZONE_START_IDX + p * pageCapacity);
+      const brkXml = breakCols.map(id => `<brk id="${id}" max="1048575" man="1"/>`).join("");
+      const colBreaksXml = `<colBreaks count="${breakCols.length}" manualBreakCount="${breakCols.length}">${brkXml}</colBreaks>`;
+      sheetXml = sheetXml.replace(/<\/rowBreaks>/, `</rowBreaks>${colBreaksXml}`);
+    }
+
+    zip.file(sheetPath, sheetXml);
+
+    // 新增這個sheet的 Print_Titles（重複A~C），只在超過一頁時才需要
+    if(numPages > 1 && !new RegExp(`_xlnm\\.Print_Titles" localSheetId="${sheetIdx}"`).test(wbXml)){
+      const printAreaEntryRe = new RegExp(`<definedName name="_xlnm\\.Print_Area" localSheetId="${sheetIdx}">([^!]*)!`);
+      const paMatch = wbXml.match(printAreaEntryRe);
+      if(!paMatch){
+        throw new Error(`範本結構與預期不符：找不到第${sheetIdx+1}個sheet的Print_Area定義（新增Print_Titles需要用到），為避免猜測性修改已停止產生，請回報這個訊息。`);
+      }
+      const sheetRefPart = paMatch[1];
+      const printTitlesEntry = `<definedName name="_xlnm.Print_Titles" localSheetId="${sheetIdx}">${sheetRefPart}!$A:$C</definedName>`;
+      wbXml = wbXml.replace(/<\/definedNames>/, `${printTitlesEntry}</definedNames>`);
+    }
+
+    // 更新這個sheet對應的 Print_Area：涵蓋「全部頁面」的完整範圍（A~finalCol），
+    // 不是只框住單一頁的寬度——Print_Area決定的是「整份文件實際會印出來的範圍」，
+    // 如果只框第一頁寬度，後面幾頁的學生欄位資料會完全印不出來，這跟
+    // Print_Titles（每頁重複A~C）是兩件不同的事，不能混為一談。
+    // Phase2.3-C：列號部分也要套用totalDelta（教材新增/刪除造成的實體列
+    // 數增減），不能再像Phase1.3~2.3B那樣直接沿用範本原始列號不變。
+    const printAreaRe = new RegExp(`(localSheetId="${sheetIdx}">[^<]*\\$A\\$1:\\$)${nativeLastCol}\\$(\\d+)(</definedName>)`);
+    const printAreaMatch = wbXml.match(printAreaRe);
+    if(!printAreaMatch){
+      throw new Error(`範本結構與預期不符：找不到第${sheetIdx+1}個sheet對應的Print_Area定義，為避免猜測性修改已停止產生，請回報這個訊息。`);
+    }
+    const newPrintAreaLastRow = parseInt(printAreaMatch[2], 10) + totalDelta;
+    wbXml = wbXml.replace(printAreaRe, (m, pre, oldRow, post) => `${pre}${finalCol}$${newPrintAreaLastRow}${post}`);
+  }
+
+  zip.file(PROGRESS_WORKBOOK_PATH, wbXml);
+  zip.file(PROGRESS_STYLES_PATH, stylesXml);
+  return zip;
+}
+
+// Phase2.6：產生前的摘要確認。generateProgressReport()不管教材管理頁面
+// 目前選的是哪個科目/期別，一律會處理全部4科目x2期別共8組（見上面主迴圈
+// `for(let sheetIdx = 0; sheetIdx < PROGRESS_SHEET_PATHS.length; ...)`），
+// 所以摘要也必須完整反映這8組的實際筆數，不能只顯示教材管理頁面「目前
+// 選取」的那一組，否則會跟真正的產出範圍不一致。這裡純粹讀取記憶體中的
+// curriculumData算數字，不會建立workbook、不會讀範本、不會寫入
+// CurriculumData、不會產生任何檔案。
+function buildProgressSummaryData(){
+  const groups = [];
+  let totalRows = 0;
+  let totalImportant = 0;
+  for(const subj of CURRICULUM_SUBJECTS){
+    for(const term of ["期中", "期末"]){
+      const block = getCurriculumBlock(subj, term);
+      const rows = block ? block.rows : [];
+      const importantCount = rows.filter(r => !!r.important).length;
+      totalRows += rows.length;
+      totalImportant += importantCount;
+      groups.push({ subject: subj, term, count: rows.length, important: importantCount });
+    }
+  }
+  return { groups, totalRows, totalImportant };
+}
+
+function buildProgressConfirmMessage(){
+  const { groups, totalRows, totalImportant } = buildProgressSummaryData();
+  const lines = groups.map(g => `${CURRICULUM_SUBJECT_LABELS[g.subject] || g.subject}－${g.term}：${g.count}筆（重要${g.important}筆）`);
+  return `本次將產生全部科目／期別的進度追蹤表：\n\n${lines.join("\n")}\n\n合計：教材共${totalRows}筆，重要教材${totalImportant}筆\n\n確定要產生進度追蹤表嗎？`;
+}
+
+document.getElementById("progressGenerateBtn").addEventListener("click", async ()=>{
+  const status = document.getElementById("progressStatus");
+  const shareBtn = document.getElementById("progressShareBtn");
+  const genBtn = document.getElementById("progressGenerateBtn");
+
+  const names = students.map(s=>(s.name||"").trim()).filter(n=>n.length>0);
+
+  status.style.display = "none";
+  status.className = "";
+
+  if(names.length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "「學生名單」頁面目前還沒有資料，請先去新增學生。";
+    return;
+  }
+
+  // Phase2.6：產生前先確認範圍與筆數。ensureCurriculumLoaded()確保摘要用
+  // 的是當下最新的curriculumData（老師剛新增/刪除/修改完立刻點產生，也能
+  // 反映最新結果），已經載入過的話直接return，不會重新seed、不會洗掉
+  // 老師的編輯。這一步只讀資料算數字、跳出瀏覽器原生confirm()，完全不會
+  // 建立workbook/讀範本/寫入CurriculumData/產生檔案；按下「取消」會直接
+  // return，不會執行到下面任何Excel相關程式碼，資料/Undo堆疊都不受影響。
+  await ensureCurriculumLoaded();
+  if(!confirm(buildProgressConfirmMessage())) return;
+
+  genBtn.disabled = true;
+  genBtn.textContent = "產生中…";
+
+  try{
+    const zip = await generateProgressReport(names);
+    const outBuf = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const today = new Date();
+    const fname = `進度追蹤表_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,"0")}${String(today.getDate()).padStart(2,"0")}.xlsx`;
+    const file = new File([outBuf], fname, {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    status.style.display = "block";
+    status.className = "";
+    status.textContent = `已產生進度追蹤表，共 ${names.length} 位學生（國/數/社/自四科）。`;
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      shareBtn.style.display = "block";
+      shareBtn.onclick = async ()=>{
+        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 進度追蹤表"}); }
+        catch(err){ /* 使用者取消分享，屬正常操作 */ }
+      };
+    }else{
+      shareBtn.style.display = "none";
+    }
+
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "產生失敗：" + err.message;
+  }finally{
+    genBtn.disabled = false;
+    genBtn.textContent = "產生並下載進度追蹤表 (.xlsx)";
+  }
+});
+
+/* ---------- 頁面五：教材管理（Phase 2.1 修正版，唯讀檢視） ---------- */
+// 【架構備註】這一版只做「範本→CurriculumData→唯讀畫面」，不提供新增/編輯/
+// 刪除/排序（那是Phase 2.2），也完全不影響進度追蹤表現有的Excel產生流程
+// （Phase1.3那一段程式碼一行都沒有改動，兩邊各自獨立讀範本）。
+//
+// 修正版變更（取代上一版）：
+// 1. 取消 kind:"lesson"|"exam" 與「成績考查/加油小站」關鍵字判斷——「段考」
+//    跟「重要教材」是兩個不同概念，不該用程式猜測哪一列是段考。
+// 2. 改成 important:boolean，Seed時依範本B欄原始字型是否為粗體初始化，
+//    之後完全由老師在畫面上自行決定，重新整理不會被範本覆蓋。
+// 3. 範本裡「A/B/C三欄原始值全部是空的」列（純版面預留空白，例如自然科期中
+//    第16~21列＋第8列）不納入CurriculumData，但那是資料模型的事，不影響
+//    Excel輸出時範本原有的空白版面（Excel輸出這階段完全沒有改動）。
+const CURRICULUM_STORAGE_KEY = "danny_curriculum_v1";
+const CURRICULUM_SUBJECTS = ["國","數","社","自"];
+// Phase2.5：科目單選鈕上顯示的是全名（國語/數學/社會/自然），但資料模型
+// 跟Excel sheet對應用的是簡稱（國/數/社/自）；這個對照表只給UI顯示用，
+// 不影響資料模型。
+const CURRICULUM_SUBJECT_LABELS = { "國": "國語", "數": "數學", "社": "社會", "自": "自然" };
+// 每次 seedCurriculumFromTemplate()/getAbText() 的抽取邏輯本身有修正（跟外層
+// CurriculumData的schema版本"version"是兩件事）時就+1，強制既有localStorage
+// 裡可能存了「舊抽取邏輯產生的錯誤值」的資料重新seed一次。Phase2.1.2發現
+// 上一輪的getAbText()修正沒有真的套用到這支正式檔案（只改到Python測試腳本），
+// 導致已經seed過的老師端資料還是卡著錯誤的頁數，所以這裡bump成2，強制重抽。
+const CURRICULUM_SEED_VERSION = 2;
+
+// 判斷某個style id的字型是否為粗體，只用來初始化Seed時的important值，
+// 直接複用進度追蹤表已有的 parseCellXfsList()/parseFontsList()。
+function isBoldStyle(styleId, xfList, fontsList){
+  if(styleId === null || styleId === undefined) return false;
+  const xf = xfList[parseInt(styleId, 10)] || "";
+  const fontIdMatch = xf.match(/fontId="(\d+)"/);
+  const font = fontsList[parseInt(fontIdMatch ? fontIdMatch[1] : "0", 10)] || "";
+  return /<b\s*\/>/.test(font);
+}
+
+// 解析sharedStrings，回傳兩個平行陣列：純文字(排除Wingdings符號run)、
+// Wingdings符號run的文字(沒有就是null)。跟進度追蹤表既有的parseSharedStrings()
+// 不同的地方：那個函式會把Wingdings符號run的文字也併進來(例如"期中成績考查j")，
+// 這裡刻意分開，才能還原教材資料真正的內容文字，同時保留符號後綴。
+function parseSharedStringsDetailed(ssXmlRaw){
+  const items = ssXmlRaw.match(/<si>[\s\S]*?<\/si>/g) || [];
+  const plainTexts = [];
+  const wingdingsSuffixes = [];
+  for(const item of items){
+    const runs = item.match(/<r>[\s\S]*?<\/r>/g);
+    if(runs){
+      let plain = "";
+      let wingdings = null;
+      for(const r of runs){
+        const tMatch = r.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+        const text = tMatch ? tMatch[1] : "";
+        if(r.includes("Wingdings")) wingdings = text;
+        else plain += text;
+      }
+      plainTexts.push(plain);
+      wingdingsSuffixes.push(wingdings);
+    }else{
+      const tMatch = item.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+      plainTexts.push(tMatch ? tMatch[1] : "");
+      wingdingsSuffixes.push(null);
+    }
+  }
+  return { plainTexts, wingdingsSuffixes };
+}
+function getCellSharedStrIdx(sheetXml, ref){
+  const m = sheetXml.match(new RegExp(`<c r="${ref}" s="\\d+" t="s"><v>(\\d+)</v></c>`));
+  return m ? parseInt(m[1], 10) : null;
+}
+// Phase2.1.2修正：原本只處理 t="s"（共用字串）儲存格，但範本裡有些頁數是
+// 純數字儲存格（例如"21"這種單一頁碼，沒有~符號，範本作者直接打數字，
+// Excel存成沒有t=屬性的數字型別，不是共用字串），導致這幾筆頁數被讀成空字串。
+// 改成通用讀法：t="s"→查共用字串；t="inlineStr"→讀<is><t>；其餘(含無t=
+// 屬性的數字)→直接讀<v>的原始文字。（跟Python測試腳本用同一套邏輯，已對照
+// 範本驗證過。）
+function getAbText(sheetXml, plainTexts, ref){
+  const m = sheetXml.match(new RegExp(`<c r="${ref}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`));
+  if(!m) return "";
+  const cell = m[0];
+  const typeMatch = cell.match(/t="(\w+)"/);
+  const cellType = typeMatch ? typeMatch[1] : "n"; // 沒有t=屬性時，OOXML預設就是數字類型
+  if(cellType === "s"){
+    const vMatch = cell.match(/<v>(\d+)<\/v>/);
+    if(!vMatch) return "";
+    const idx = parseInt(vMatch[1], 10);
+    return plainTexts[idx] !== undefined ? plainTexts[idx] : "";
+  }
+  if(cellType === "inlineStr"){
+    const tMatch = cell.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+    return tMatch ? tMatch[1] : "";
+  }
+  const vMatch = cell.match(/<v>([\s\S]*?)<\/v>/);
+  return vMatch ? vMatch[1] : "";
+}
+
+// Phase2.2.1：範本裡的Wingdings j/k裝飾，實測16筆全部是「同一個content配
+// 兩個頁碼範圍」的固定成對結構（j=第一項、k=第二項），已逐筆對照過沒有例外。
+// 這個系統之後要服務的教材不一定跟目前範本一樣，不應該讓老師被"這一列曾經
+// 用過Wingdings"這件事綁住操作權限，所以seed階段直接把j/k轉成看得懂的中文
+// 「（一）」「（二）」接在content後面，資料模型從此不再有wingdingsSuffix這
+// 個欄位，全部教材列一視同仁，可以自由編輯/刪除/排序。
+const WINGDINGS_TO_LABEL = { j: "（一）", k: "（二）" };
+
+// 單元欄依你的決定：資料模型裡每一列都照實存單元名稱（不是只存在第一筆），
+// 範本原始檔案A欄延續列是留空的，這裡用carryUnit補回真正的單元名稱。
+//
+// 排除規則：只有「這一列自己的A/B/C原始值全部是空的」才視為版面預留空白列，
+// 不納入CurriculumData。用的是carry-forward"之前"的原始值，不是carry後的
+// unit——像社會科"第一單元"這種只有單元名稱、內容/頁數是空的分隔列，因為A
+// 本身非空，仍然會正確保留，不會被誤判成空白列。（已用Python對照範本XML
+// 逐列驗證過這個規則不會誤刪任何真實教材列，見完成報告。）
+function seedCurriculumBlockRows(sheetXml, plainTexts, wingdingsSuffixes, xfList, fontsList, dataRows, subject, term){
+  const rows = [];
+  let carryUnit = "";
+  let idx = 0;
+  for(const row of dataRows){
+    const unitRaw = getAbText(sheetXml, plainTexts, `A${row}`);
+    let content = getAbText(sheetXml, plainTexts, `B${row}`);
+    const pages = getAbText(sheetXml, plainTexts, `C${row}`);
+    if(!unitRaw && !content && !pages) continue; // 純版面預留空白列，不納入資料
+    if(unitRaw) carryUnit = unitRaw;
+    const bIdx = getCellSharedStrIdx(sheetXml, `B${row}`);
+    const wingdingsSuffix = (bIdx !== null && wingdingsSuffixes[bIdx]) ? wingdingsSuffixes[bIdx] : null;
+    if(wingdingsSuffix && WINGDINGS_TO_LABEL[wingdingsSuffix]){
+      content = content + WINGDINGS_TO_LABEL[wingdingsSuffix];
+    }
+    const important = isBoldStyle(getCellStyle(sheetXml, `B${row}`), xfList, fontsList);
+    rows.push({
+      id: `${subject}-${term}-${idx++}`,
+      unit: carryUnit,
+      content: content,
+      pages: pages,
+      important: important
+    });
+  }
+  return rows;
+}
+
+// 從範本重新抽取一份完整的CurriculumData（4科目×期中/期末共8組）。
+// 完全複用進度追蹤表既有的 findStudentZoneRows()/PROGRESS_SHEET_PATHS/
+// parseCellXfsList()/parseFontsList() 等函式跟常數去定位表頭列/資料列範圍、
+// 讀取樣式，不重新發明一套判斷邏輯。
+async function seedCurriculumFromTemplate(){
+  const resp = await fetch(encodeURI(PROGRESS_TEMPLATE_PATH));
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_進度追蹤表.xlsx`);
+  const buf = await resp.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const ssFile = zip.file(PROGRESS_SHARED_STRINGS_PATH);
+  const stylesFile = zip.file(PROGRESS_STYLES_PATH);
+  if(!ssFile || !stylesFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+  const { plainTexts, wingdingsSuffixes } = parseSharedStringsDetailed(await ssFile.async("string"));
+  const stylesXml = await stylesFile.async("string");
+  const xfList = parseCellXfsList(stylesXml);
+  const fontsList = parseFontsList(stylesXml);
+
+  const blocks = [];
+  for(let sheetIdx = 0; sheetIdx < PROGRESS_SHEET_PATHS.length; sheetIdx++){
+    const subj = CURRICULUM_SUBJECTS[sheetIdx];
+    const sheetFile = zip.file(PROGRESS_SHEET_PATHS[sheetIdx]);
+    if(!sheetFile) throw new Error(`範本結構與預期不符：找不到第${sheetIdx+1}個sheet，為避免猜測性修改已停止，請回報這個訊息。`);
+    const sheetXml = await sheetFile.async("string");
+    const zoneRows = findStudentZoneRows(sheetXml).slice().sort((a,b)=>a-b);
+    const headerRows = zoneRows.filter(r => isHeaderRow(sheetXml, plainTexts, r)).sort((a,b)=>a-b);
+    if(headerRows.length !== 2){
+      throw new Error(`範本結構與預期不符（${subj}偵測到${headerRows.length}個表頭列，預期應為2個），為避免猜測性修改已停止，請回報這個訊息。`);
+    }
+    const [h1, h2] = headerRows;
+    const midRows = zoneRows.filter(r => r > h1 && r < h2);
+    const endRows = zoneRows.filter(r => r > h2);
+    blocks.push({ subject: subj, term: "期中", rows: seedCurriculumBlockRows(sheetXml, plainTexts, wingdingsSuffixes, xfList, fontsList, midRows, subj, "期中") });
+    blocks.push({ subject: subj, term: "期末", rows: seedCurriculumBlockRows(sheetXml, plainTexts, wingdingsSuffixes, xfList, fontsList, endRows, subj, "期末") });
+  }
+  return { version: 1, seedVersion: CURRICULUM_SEED_VERSION, blocks };
+}
+
+function loadCurriculum(){
+  try{
+    const raw = localStorage.getItem(CURRICULUM_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function saveCurriculum(data){ localStorage.setItem(CURRICULUM_STORAGE_KEY, JSON.stringify(data)); }
+
+// 舊資料相容性檢查：上一版Phase2.1用的是 kind:"lesson"|"exam"，這一版改成
+// important:boolean，兩個欄位語意不同（"段考"跟"重要教材"是不同概念），沒辦法
+//互相換算。因為Phase2.1從頭到尾都是唯讀（老師不可能已經手動編輯過任何資料），
+// 舊資料100%是先前那版seed邏輯的產物，不是老師手動輸入的成果，所以偵測到舊
+// schema時直接視為過期、捨棄重新seed，不做欄位對欄位的假轉換，避免生造出
+// 沒有根據的important值。
+function isLegacyCurriculumData(data){
+  if(!data || !Array.isArray(data.blocks)) return true;
+  if(data.seedVersion !== CURRICULUM_SEED_VERSION) return true; // 抽取邏輯本身有修正過，強制重抽
+  for(const block of data.blocks){
+    if(!Array.isArray(block.rows)) continue;
+    for(const row of block.rows){
+      if(Object.prototype.hasOwnProperty.call(row, "kind")) return true;
+      if(!Object.prototype.hasOwnProperty.call(row, "important")) return true;
+    }
+  }
+  return false;
+}
+
+// Phase2.2.1：把既有資料裡殘留的wingdingsSuffix("j"/"k")轉成中文「（一）」
+// 「（二）」接在content後面，然後移除這個欄位。這是「就地轉換」，不是重新
+// seed——因為Phase2.2已經開放老師編輯，localStorage裡可能已經有老師自己改過
+// 的內容/新增的列/刪除過的列/調整過的順序，這些都不能被洗掉，只能針對
+// wingdingsSuffix這個特定欄位做轉換。用data.wingdingsMigrated這個獨立旗標
+// （不是seedVersion，seedVersion觸發的是整份重新seed，會蓋掉老師的編輯）
+// 確保這個轉換只會執行一次，重新整理不會疊加變成「（一）（一）」。
+function migrateWingdingsToPlainText(data){
+  if(!data || data.wingdingsMigrated) return data;
+  for(const block of (data.blocks || [])){
+    for(const row of (block.rows || [])){
+      if(row && row.wingdingsSuffix && WINGDINGS_TO_LABEL[row.wingdingsSuffix]){
+        row.content = toCurriculumDisplayText(row.content) + WINGDINGS_TO_LABEL[row.wingdingsSuffix];
+      }
+      if(row) delete row.wingdingsSuffix;
+    }
+  }
+  data.wingdingsMigrated = true;
+  return data;
+}
+
+let curriculumData = null;
+let curriculumSubject = "國";
+let curriculumTerm = "期中";
+
+function getCurriculumBlock(subject, term){
+  return curriculumData ? curriculumData.blocks.find(b => b.subject === subject && b.term === term) : null;
+}
+
+// ---- 教材管理復原(undo)功能 ----
+// 設計：記憶體內的堆疊，保存最近10筆curriculumData的完整深拷貝快照，每次
+// 「即將要做出會改變資料的操作」之前先把目前狀態存一份進去，復原時直接
+// 彈出最後一份、整份蓋回curriculumData再存回localStorage。故意不做逐欄位
+// diff/版本管理——教材資料量很小(4科目x2期x十幾筆)，snapshot全量深拷貝的
+// 效能成本可以忽略，換來邏輯簡單可靠（符合指示：不需要複雜版本管理）。
+// 堆疊本身只存在記憶體、不寫入localStorage：重新整理頁面後復原歷史會
+// 清空，但復原「後」的資料本身已經正常存進danny_curriculum_v1，不會遺失
+// ——這是刻意的簡化，如果之後需要跨重新整理仍可復原，可以再另外用獨立的
+// localStorage key存堆疊，但目前先採用較簡單可靠的記憶體版本。
+const CURRICULUM_UNDO_MAX = 10;
+let curriculumUndoStack = [];
+
+function updateCurriculumUndoButton(){
+  const btn = document.getElementById("curriculumUndoBtn");
+  if(btn) btn.disabled = curriculumUndoStack.length === 0;
+}
+
+// Phase2.5：新增/刪除/上移/下移/重要/復原這些離散操作雖然都會立即存檔，
+// 但畫面上原本沒有任何文字回饋，老師不容易確定「剛剛的操作真的生效了」。
+// 這裡用既有的curriculumStatus區塊短暫顯示一行文字，不是彈窗，幾秒後
+// 自動消失，不會干擾接下來的操作；如果後面又有新的訊息(不論是這個函式
+// 還是錯誤訊息)，會直接覆蓋掉還沒消失的舊訊息，不會疊加。
+let curriculumStatusTimer = null;
+function showCurriculumStatus(text){
+  const status = document.getElementById("curriculumStatus");
+  if(!status) return;
+  if(curriculumStatusTimer) clearTimeout(curriculumStatusTimer);
+  status.style.display = "block";
+  status.className = "";
+  status.textContent = text;
+  curriculumStatusTimer = setTimeout(() => {
+    status.style.display = "none";
+  }, 1800);
+}
+
+// 用在新增/刪除/上移/下移/important勾選這種「一次性、離散」的操作：呼叫時
+// 立即把「操作前」的狀態存進堆疊。
+function pushCurriculumUndoSnapshot(){
+  if(!curriculumData) return;
+  curriculumUndoStack.push(JSON.parse(JSON.stringify(curriculumData)));
+  if(curriculumUndoStack.length > CURRICULUM_UNDO_MAX) curriculumUndoStack.shift();
+  updateCurriculumUndoButton();
+}
+
+// 用在文字輸入框這種「連續編輯」的情境：在使用者focus那一刻先記錄快照
+// 候選（不立即佔用復原額度），等blur離開欄位時，只有在內容真的有變動時
+// 才真正commit進堆疊——避免每打一個字就佔用一格復原歷史，導致「復原」
+// 變成要按很多次才會回到有意義的狀態。
+function commitCurriculumUndoIfChanged(snapshotBefore){
+  if(!snapshotBefore || !curriculumData) return;
+  if(JSON.stringify(snapshotBefore) === JSON.stringify(curriculumData)) return;
+  curriculumUndoStack.push(snapshotBefore);
+  if(curriculumUndoStack.length > CURRICULUM_UNDO_MAX) curriculumUndoStack.shift();
+  updateCurriculumUndoButton();
+}
+
+function undoCurriculumChange(){
+  if(curriculumUndoStack.length === 0) return;
+  curriculumData = curriculumUndoStack.pop();
+  saveCurriculum(curriculumData);
+  renderCurriculumList();
+  updateCurriculumUndoButton();
+  showCurriculumStatus("已復原。");
+}
+
+// ---- Phase 2.4：教材資料匯出／匯入 JSON ----
+//
+// 匯出／匯入只處理目前資料模型真正需要的欄位（id/unit/content/pages/
+// important），一律用白名單方式重建每一筆資料，不會把curriculumUndoStack
+// 這種跟教材內容無關的東西、或wingdingsSuffix這種已淘汰欄位帶進來/帶出去
+// ——不管原始物件裡實際還有什麼其他欄位，一律忽略。
+
+// 匯出用：把目前curriculumData整理成乾淨的匯出格式。
+function buildCurriculumExportData(){
+  return {
+    version: curriculumData.version,
+    seedVersion: curriculumData.seedVersion,
+    wingdingsMigrated: true,
+    exportedAt: new Date().toISOString(),
+    blocks: curriculumData.blocks.map(b => ({
+      subject: b.subject,
+      term: b.term,
+      rows: b.rows.map(r => ({
+        id: String(r.id),
+        unit: toCurriculumDisplayText(r.unit),
+        content: toCurriculumDisplayText(r.content),
+        pages: toCurriculumDisplayText(r.pages),
+        important: !!r.important
+      }))
+    }))
+  };
+}
+
+function curriculumExportFilename(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return `丹尼美語_教材資料_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.json`;
+}
+
+// 匯入驗證：不能因為JSON parse成功就直接寫入localStorage，這裡逐項檢查
+// 格式(object/version/seedVersion/blocks結構)跟每一筆資料(id/unit/content/
+// pages/important的型別、id唯一性)。只要有一項不符合就整批拒絕匯入，不做
+// 任何「自動修正」（例如自動改掉重複的id）。舊格式殘留的wingdingsSuffix等
+// 欄位一律安全忽略、不重新寫進資料模型，不會因為多了這個欄位就拒絕匯入。
+// 回傳 {ok:true, data: 正規化後可直接指派給curriculumData的物件} 或
+// {ok:false, error: "給老師看的錯誤訊息"}。
+function validateCurriculumImportData(parsed){
+  if(!parsed || typeof parsed !== "object" || Array.isArray(parsed)){
+    return {ok:false, error:"檔案內容不是有效的教材資料格式（不是JSON物件）。"};
+  }
+  if(parsed.version !== 1){
+    return {ok:false, error:`資料版本不符（version應為1，實際為${JSON.stringify(parsed.version)}），可能不是教材管理匯出的備份檔。`};
+  }
+  if(parsed.seedVersion !== CURRICULUM_SEED_VERSION){
+    return {ok:false, error:`資料版本不符（seedVersion應為${CURRICULUM_SEED_VERSION}，實際為${JSON.stringify(parsed.seedVersion)}），可能是過舊或不相容的備份檔。`};
+  }
+  if(!Array.isArray(parsed.blocks)){
+    return {ok:false, error:"缺少必要的教材區塊資料（blocks）。"};
+  }
+  const seenIds = new Set();
+  const cleanBlocks = [];
+  for(const block of parsed.blocks){
+    if(!block || typeof block !== "object"){
+      return {ok:false, error:"教材區塊格式錯誤。"};
+    }
+    if(typeof block.subject !== "string" || !CURRICULUM_SUBJECTS.includes(block.subject)){
+      return {ok:false, error:`教材區塊的科目不正確：${JSON.stringify(block.subject)}`};
+    }
+    if(block.term !== "期中" && block.term !== "期末"){
+      return {ok:false, error:`教材區塊的期別不正確：${JSON.stringify(block.term)}`};
+    }
+    if(!Array.isArray(block.rows)){
+      return {ok:false, error:`${block.subject}${block.term}缺少教材列資料（rows）。`};
+    }
+    const cleanRows = [];
+    for(const row of block.rows){
+      if(!row || typeof row !== "object"){
+        return {ok:false, error:`${block.subject}${block.term}有一筆教材格式錯誤。`};
+      }
+      if(typeof row.id !== "string" || row.id.length === 0){
+        return {ok:false, error:`${block.subject}${block.term}有一筆教材缺少有效的id。`};
+      }
+      if(seenIds.has(row.id)){
+        return {ok:false, error:`教材id重複：${row.id}，匯入失敗，請修正資料後再試。`};
+      }
+      seenIds.add(row.id);
+      if(typeof row.unit !== "string"){
+        return {ok:false, error:`教材「${row.id}」的單元欄位必須是文字。`};
+      }
+      if(typeof row.content !== "string"){
+        return {ok:false, error:`教材「${row.id}」的內容欄位必須是文字。`};
+      }
+      if(typeof row.pages !== "string"){
+        return {ok:false, error:`教材「${row.id}」的頁數欄位必須是文字。`};
+      }
+      if(typeof row.important !== "boolean"){
+        return {ok:false, error:`教材「${row.id}」的重要標記必須是true/false。`};
+      }
+      // 白名單重建，任何其他欄位（例如舊格式的wingdingsSuffix）一律安全
+      // 忽略，不會被帶進新的資料模型裡。
+      cleanRows.push({ id: row.id, unit: row.unit, content: row.content, pages: row.pages, important: row.important });
+    }
+    cleanBlocks.push({ subject: block.subject, term: block.term, rows: cleanRows });
+  }
+  for(const subj of CURRICULUM_SUBJECTS){
+    for(const term of ["期中", "期末"]){
+      if(!cleanBlocks.some(b => b.subject === subj && b.term === term)){
+        return {ok:false, error:`匯入資料缺少「${subj}${term}」區塊，資料不完整。`};
+      }
+    }
+  }
+  return {
+    ok: true,
+    data: { version: 1, seedVersion: CURRICULUM_SEED_VERSION, wingdingsMigrated: true, blocks: cleanBlocks }
+  };
+}
+
+async function handleCurriculumImportFile(file){
+  let text;
+  try{
+    text = await file.text();
+  }catch(err){
+    alert("讀取檔案失敗：" + err.message);
+    return;
+  }
+  let parsed;
+  try{
+    parsed = JSON.parse(text);
+  }catch(err){
+    alert("這不是有效的JSON檔案，請確認選擇的是正確的教材資料備份檔。");
+    return;
+  }
+  const result = validateCurriculumImportData(parsed);
+  if(!result.ok){
+    alert("匯入失敗：" + result.error);
+    return;
+  }
+  const confirmed = confirm("即將匯入教材資料。\n\n匯入後會覆蓋目前教材管理中的全部資料。\n建議先匯出目前資料作為備份。\n\n確定要繼續嗎？");
+  if(!confirmed) return; // 取消：完全不修改目前資料
+  pushCurriculumUndoSnapshot(); // 匯入前自動保護目前資料，沿用既有Undo機制與10筆上限，不另外設計新的保存方式
+  curriculumData = result.data;
+  saveCurriculum(curriculumData); // 不會動到seedVersion，不會觸發重新seed
+  renderCurriculumList();
+  updateCurriculumUndoButton();
+  showCurriculumStatus("教材資料匯入成功。");
+}
+
+// 顯示用文字一律經過這個轉換：pages（或unit/content）不管是字串"21"、
+// 純數字21、還是null/undefined，都要能顯示成文字，不能因為型別不是字串
+// 就被當成空值——單一頁碼在範本裡有時是數字儲存格、有時是文字儲存格，
+// UI不應該預設它一定是字串。
+const toCurriculumDisplayText = (v) => (v === null || v === undefined) ? "" : String(v);
+
+function findCurriculumRowIndex(block, id){
+  return block.rows.findIndex(r => r.id === id);
+}
+
+// 新增列用的id：時間戳+亂數，保證不會跟現有seed出來的"科目-期別-序號"格式
+// 衝突，也不會因為之後排序/刪除其他列而改變（不是用陣列index當id）。
+function nextCurriculumRowId(block){
+  return `${block.subject}-${block.term}-new-${Date.now()}-${Math.floor(Math.random()*10000)}`;
+}
+
+// Phase2.2.1：取消Wingdings列的唯讀限制，所有教材列一視同仁，不再因為
+// 「這一列曾經在範本裡用過Wingdings符號」而限制老師的編輯/刪除/排序權限。
+function updateCurriculumField(subject, term, id, field, rawValue){
+  const block = getCurriculumBlock(subject, term);
+  if(!block) return;
+  const idx = findCurriculumRowIndex(block, id);
+  if(idx === -1) return;
+  const row = block.rows[idx];
+  if(field === "important"){
+    row.important = !!rawValue;
+  }else if(field === "unit" || field === "content" || field === "pages"){
+    row[field] = rawValue == null ? "" : String(rawValue); // 基本型別清理，避免undefined/null污染資料
+  }
+  saveCurriculum(curriculumData);
+}
+
+function addCurriculumRow(subject, term){
+  const block = getCurriculumBlock(subject, term);
+  if(!block) return;
+  pushCurriculumUndoSnapshot();
+  block.rows.push({
+    id: nextCurriculumRowId(block),
+    unit: "", content: "", pages: "", important: false
+  });
+  saveCurriculum(curriculumData);
+  renderCurriculumList();
+  showCurriculumStatus("已新增一筆教材。");
+}
+
+function deleteCurriculumRow(subject, term, id){
+  const block = getCurriculumBlock(subject, term);
+  if(!block) return;
+  const idx = findCurriculumRowIndex(block, id);
+  if(idx === -1) return;
+  if(!confirm("確定要刪除這筆教材嗎？")) return;
+  pushCurriculumUndoSnapshot();
+  block.rows.splice(idx, 1);
+  saveCurriculum(curriculumData);
+  renderCurriculumList();
+  showCurriculumStatus("已刪除。");
+}
+
+function moveCurriculumRow(subject, term, id, direction){
+  const block = getCurriculumBlock(subject, term);
+  if(!block) return;
+  const idx = findCurriculumRowIndex(block, id);
+  if(idx === -1) return;
+  const targetIdx = idx + direction;
+  if(targetIdx < 0 || targetIdx >= block.rows.length) return;
+  pushCurriculumUndoSnapshot();
+  const tmp = block.rows[idx];
+  block.rows[idx] = block.rows[targetIdx];
+  block.rows[targetIdx] = tmp;
+  saveCurriculum(curriculumData);
+  renderCurriculumList();
+  showCurriculumStatus(direction < 0 ? "已上移。" : "已下移。");
+}
+
+function renderCurriculumList(){
+  const list = document.getElementById("curriculumList");
+  // Phase2.5：清單上方明確標出目前正在編輯哪個科目/期別，避免老師只能靠
+  // 兩排小型單選鈕自己判斷目前選到什麼。
+  const titleEl = document.getElementById("curriculumBlockTitle");
+  if(titleEl) titleEl.textContent = `${CURRICULUM_SUBJECT_LABELS[curriculumSubject] || curriculumSubject}－${curriculumTerm}教材`;
+  const block = getCurriculumBlock(curriculumSubject, curriculumTerm);
+  if(!block){
+    list.innerHTML = '<div class="empty">這個科目/期別目前沒有教材資料</div>';
+    return;
+  }
+  if(block.rows.length === 0){
+    list.innerHTML = '<div class="empty">目前沒有教材列，按下面「新增教材」開始建立</div>';
+    return;
+  }
+  // Phase2.2.1起：所有教材列一視同仁，不再有「Wingdings特殊列唯讀」這個分支。
+  list.innerHTML = block.rows.map((r, idx) => {
+    const canMoveUp = idx > 0;
+    const canMoveDown = idx < block.rows.length-1;
+    return `<div class="curriculum-edit-row${r.important ? " is-important" : ""}" data-id="${escapeXml(r.id)}">
+      <div class="cu-edit-fields">
+        <input class="cu-input cu-input-unit" type="text" data-field="unit" value="${escapeXml(toCurriculumDisplayText(r.unit))}" placeholder="單元">
+        <input class="cu-input cu-input-content" type="text" data-field="content" value="${escapeXml(toCurriculumDisplayText(r.content))}" placeholder="內容">
+        <input class="cu-input cu-input-pages" type="text" data-field="pages" value="${escapeXml(toCurriculumDisplayText(r.pages))}" placeholder="頁數">
+      </div>
+      <div class="cu-edit-actions">
+        <label class="cu-important-label">
+          <input type="checkbox" data-field="important" ${r.important ? "checked" : ""}>重要
+        </label>
+        <div class="cu-move-btns">
+          <button type="button" data-move="-1" ${canMoveUp ? "" : "disabled"} aria-label="上移">↑</button>
+          <button type="button" data-move="1" ${canMoveDown ? "" : "disabled"} aria-label="下移">↓</button>
+        </div>
+        <button type="button" class="cu-delete-btn" data-delete aria-label="刪除這筆教材">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll(".curriculum-edit-row").forEach(rowEl => {
+    const id = rowEl.dataset.id;
+    rowEl.querySelectorAll(".cu-input").forEach(inp => {
+      // 文字欄位的復原快照：在focus那一刻先記下「編輯前」的狀態候選，
+      // 打字過程中每個input事件只更新資料/localStorage(維持原本即時儲存
+      // 的行為)，不佔用復原額度；等blur離開欄位時，只有內容真的有變動
+      // 才commit進復原堆疊，避免一打字就洗掉復原歷史。
+      let undoSnapshotBeforeEdit = null;
+      inp.addEventListener("focus", () => {
+        undoSnapshotBeforeEdit = curriculumData ? JSON.parse(JSON.stringify(curriculumData)) : null;
+      });
+      inp.addEventListener("input", e => {
+        updateCurriculumField(curriculumSubject, curriculumTerm, id, e.target.dataset.field, e.target.value);
+      });
+      inp.addEventListener("blur", () => {
+        commitCurriculumUndoIfChanged(undoSnapshotBeforeEdit);
+        undoSnapshotBeforeEdit = null;
+      });
+    });
+    const importantCheckbox = rowEl.querySelector('input[data-field="important"]');
+    importantCheckbox.addEventListener("change", e => {
+      pushCurriculumUndoSnapshot();
+      updateCurriculumField(curriculumSubject, curriculumTerm, id, "important", e.target.checked);
+      rowEl.classList.toggle("is-important", e.target.checked);
+      showCurriculumStatus(e.target.checked ? "已標記為重要。" : "已取消重要標記。");
+    });
+    rowEl.querySelectorAll("button[data-move]").forEach(btn => {
+      btn.addEventListener("click", e => {
+        moveCurriculumRow(curriculumSubject, curriculumTerm, id, parseInt(e.target.dataset.move, 10));
+      });
+    });
+    const deleteBtn = rowEl.querySelector("button[data-delete]");
+    if(deleteBtn){
+      deleteBtn.addEventListener("click", () => {
+        deleteCurriculumRow(curriculumSubject, curriculumTerm, id);
+      });
+    }
+  });
+}
+
+async function ensureCurriculumLoaded(){
+  const status = document.getElementById("curriculumStatus");
+  if(curriculumData) return;
+  let data = loadCurriculum();
+  try{
+    if(!data || isLegacyCurriculumData(data)){
+      // schema本身不相容(缺important/還有kind/seedVersion對不上)才整份重新
+      // seed——這種情況目前只發生在"從來沒編輯過"的舊資料，可以放心重抽。
+      status.style.display = "block";
+      status.className = "";
+      status.textContent = data ? "偵測到舊版教材資料格式，正在重新從範本讀取…" : "第一次載入，正在從範本讀取教材內容…";
+      data = await seedCurriculumFromTemplate();
+      saveCurriculum(data);
+    }else{
+      // schema相容：只做針對性的wingdingsSuffix欄位轉換(就地修改)，
+      // 絕對不能整份重新seed，否則會洗掉老師在Phase2.2已經做的編輯。
+      const beforeJson = JSON.stringify(data);
+      data = migrateWingdingsToPlainText(data);
+      if(JSON.stringify(data) !== beforeJson) saveCurriculum(data);
+    }
+    curriculumData = data;
+    status.style.display = "none";
+    status.className = "";
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "教材讀取失敗：" + err.message;
+  }
+}
+
+document.querySelectorAll('input[name="curriculumSubject"]').forEach(r => r.addEventListener("change", e => {
+  curriculumSubject = e.target.value;
+  renderCurriculumList();
+}));
+document.querySelectorAll('input[name="curriculumTerm"]').forEach(r => r.addEventListener("change", e => {
+  curriculumTerm = e.target.value;
+  renderCurriculumList();
+}));
+document.getElementById("addCurriculumRow").addEventListener("click", () => {
+  addCurriculumRow(curriculumSubject, curriculumTerm);
+});
+document.getElementById("curriculumUndoBtn").addEventListener("click", () => {
+  undoCurriculumChange();
+});
+document.getElementById("exportCurriculumBtn").addEventListener("click", () => {
+  if(!curriculumData){
+    alert("教材資料尚未載入完成，請稍後再試一次。");
+    return;
+  }
+  const exportData = buildCurriculumExportData();
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = curriculumExportFilename();
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+document.getElementById("importCurriculumBtn").addEventListener("click", () => {
+  document.getElementById("importCurriculumFile").click();
+});
+document.getElementById("importCurriculumFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = ""; // 清空，讓老師可以連續選同一個檔案也能再次觸發change
+  if(!file) return;
+  await handleCurriculumImportFile(file);
+});
+// Phase2.6：導覽提示只負責「切換到既有的進度追蹤表分頁」，直接觸發底部
+// 導覽列對應按鈕本身的click，完全重用既有的分頁切換邏輯（active class、
+// pageTitle更新等都不用重寫），不新增任何資料/狀態，也完全不呼叫任何
+// Excel/進度表相關函式。
+document.getElementById("curriculumGoToProgressBtn").addEventListener("click", () => {
+  const progressTabBtn = document.querySelector('.tabbar button[data-page="progress"]');
+  if(progressTabBtn) progressTabBtn.click();
+});
+
+/* ---------- 底部導覽切換 ---------- */
+document.querySelectorAll(".tabbar button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tabbar button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+    document.getElementById("page-"+btn.dataset.page).classList.add("active");
+    document.getElementById("pageTitle").textContent = btn.dataset.title;
+    if(btn.dataset.page === "nametags") updateHints();
+    if(btn.dataset.page === "attendance") renderWorkdayList();
+    if(btn.dataset.page === "curriculum") ensureCurriculumLoaded().then(renderCurriculumList);
+  });
+});
+
+renderStudents();
+updateHints();
+
+/* ---------- 註冊 Service Worker（離線可用 + 安裝到主畫面的必要條件） ---------- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .catch(err => console.warn("Service Worker 註冊失敗：", err));
+  });
+}
+</script>
+
+</body>
+</html>
