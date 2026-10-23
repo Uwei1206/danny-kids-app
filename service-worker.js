@@ -8,7 +8,7 @@
 // 每次發布新版本，請把下面這個版本號 +1，否則手機上快取的舊版本
 // 不會自動更新。
 
-const CACHE_VERSION = "danny-kids-v1";
+const CACHE_VERSION = "danny-kids-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -16,12 +16,12 @@ const APP_SHELL = [
   "./icon-192.png",
   "./icon-512.png",
   "./icon-512-maskable.png",
-  "./templates/_範本_點名表.xlsx",
-  "./templates/_範本_名條.xlsx",
-  "./templates/_範本_評量封面.xlsx",
-  "./templates/_範本_進度追蹤表.xlsx",
-  "./templates/_範本_一般通知單.docx",
-  "./templates/_範本_寒假作業發回通知單.docx"
+  "./templates/template_attendance.xlsx",
+  "./templates/template_nametag.xlsx",
+  "./templates/template_assessment_cover.xlsx",
+  "./templates/template_progress.xlsx",
+  "./templates/template_notice_general.docx",
+  "./templates/template_notice_winterbreak.docx"
 ];
 
 // 外部 CDN 函式庫（JSZip）：離線時也要能用，另外用一個 cache 存放，

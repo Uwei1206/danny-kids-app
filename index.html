@@ -670,7 +670,7 @@ document.getElementById("addStudent").addEventListener("click", ()=>{
 });
 
 /* ---------- 頁面二：名條產生（完全動態排版，接續填滿每一列） ---------- */
-const TEMPLATE_PATH = "templates/_範本_名條.xlsx";
+const TEMPLATE_PATH = "templates/template_nametag.xlsx";
 const SHEET_PATH = "xl/worksheets/sheet1.xml";
 const STYLES_PATH = "xl/styles.xml";
 const NUMBER_STYLE_ID = "2";
@@ -855,7 +855,7 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
 
   try{
     const resp = await fetch(encodeURI(TEMPLATE_PATH));
-    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_名條.xlsx`);
+    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_nametag.xlsx`);
     const buf = await resp.arrayBuffer();
 
     const zip = await JSZip.loadAsync(buf);
@@ -936,7 +936,7 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
 });
 
 /* ---------- 頁面三：點名表產生 ---------- */
-const ATT_TEMPLATE_PATH = "templates/_範本_點名表.xlsx";
+const ATT_TEMPLATE_PATH = "templates/template_attendance.xlsx";
 const ATT_SHEET_PATH = "xl/worksheets/sheet1.xml";
 const ATT_WORKBOOK_PATH = "xl/workbook.xml";
 
@@ -1096,7 +1096,7 @@ document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
 
   try{
     const resp = await fetch(encodeURI(ATT_TEMPLATE_PATH));
-    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_點名表.xlsx`);
+    if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_attendance.xlsx`);
     const buf = await resp.arrayBuffer();
     const zip = await JSZip.loadAsync(buf);
 
@@ -1245,7 +1245,7 @@ document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
 // 形式存在 localStorage，本檔案這一段改成「依 CurriculumRow[] 動態組出列」而不是
 // 「偵測範本既有列」，但目前完全不做這件事，只是先確保現在的程式碼沒有寫死列號、
 // 沒有假設教材內容固定不變，之後替換資料來源時改動範圍可以侷限在這個區塊。
-const PROGRESS_TEMPLATE_PATH = "templates/_範本_進度追蹤表.xlsx";
+const PROGRESS_TEMPLATE_PATH = "templates/template_progress.xlsx";
 const PROGRESS_WORKBOOK_PATH = "xl/workbook.xml";
 const PROGRESS_SHARED_STRINGS_PATH = "xl/sharedStrings.xml";
 const PROGRESS_STYLES_PATH = "xl/styles.xml";
@@ -1836,7 +1836,7 @@ async function generateProgressReport(names){
   await ensureCurriculumLoaded(); // 確保CurriculumData存在（含首次使用時的seed），不管老師有沒有先開過教材管理分頁
 
   const resp = await fetch(encodeURI(PROGRESS_TEMPLATE_PATH));
-  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_進度追蹤表.xlsx`);
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_progress.xlsx`);
   const buf = await resp.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
 
@@ -2360,7 +2360,7 @@ function seedCurriculumBlockRows(sheetXml, plainTexts, wingdingsSuffixes, xfList
 // 讀取樣式，不重新發明一套判斷邏輯。
 async function seedCurriculumFromTemplate(){
   const resp = await fetch(encodeURI(PROGRESS_TEMPLATE_PATH));
-  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 _範本_進度追蹤表.xlsx`);
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_progress.xlsx`);
   const buf = await resp.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
   const ssFile = zip.file(PROGRESS_SHARED_STRINGS_PATH);
