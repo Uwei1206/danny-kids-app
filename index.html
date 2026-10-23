@@ -520,6 +520,13 @@
       <h2>產生進度追蹤表</h2>
       <p class="sub">依「學生名單」目前的實際人數與順序，自動產生對應數量的學生欄位（國語／數學／社會／自然四科），單元、內容、頁數維持範本原樣，學生欄位下方保持空白由老師自行填寫。</p>
 
+      <div class="field-label" style="margin:14px 0 6px;font-weight:700;">要產生哪些科目？</div>
+      <div id="progressSubjectPicker" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="progressSubject" value="國" checked> 國語</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="progressSubject" value="數" checked> 數學</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="progressSubject" value="社" checked> 社會</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="progressSubject" value="自" checked> 自然</label>
+      </div>
       <button class="primary-btn" id="progressGenerateBtn" type="button">產生並下載進度追蹤表 (.xlsx)</button>
       <button class="share-btn" id="progressShareBtn" type="button">分享到 Drive / LINE / Email</button>
       <div id="progressStatus"></div>
@@ -915,15 +922,7 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
     status.className = "";
     status.textContent = `已產生 ${names.length} 位學生的名條（${mode === "both" ? `直書${vCopies}份＋橫書${hCopies}份` : (mode==="vertical"?`直書${vCopies}份`:`橫書${hCopies}份`)}）。`;
 
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      shareBtn.style.display = "block";
-      shareBtn.onclick = async ()=>{
-        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 名條"}); }
-        catch(err){ /* 使用者取消分享，屬正常操作 */ }
-      };
-    }else{
-      shareBtn.style.display = "none";
-    }
+    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
@@ -934,6 +933,27 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
     genBtn.textContent = "產生並下載名條 (.xlsx)";
   }
 });
+
+/* ---------- 共用：分享按鈕 ---------- */
+// 使用者取消分享（AbortError）屬正常操作，不顯示錯誤；其他錯誤一律顯示在畫面上，
+// 不再默默吞掉（之前吞掉錯誤，導致按了沒反應卻不知道原因）。
+function setupShareButton(shareBtn, file, status){
+  if(!(navigator.canShare && navigator.canShare({files:[file]}))){
+    shareBtn.style.display = "none";
+    return;
+  }
+  shareBtn.style.display = "block";
+  shareBtn.onclick = async ()=>{
+    try{
+      await navigator.share({files:[file], title:file.name});
+    }catch(err){
+      if(err && err.name === "AbortError") return;
+      status.style.display = "block";
+      status.className = "error";
+      status.textContent = "分享失敗（" + ((err && err.name) || "未知錯誤") + "）：" + ((err && err.message) || "") + "。檔案已下載到手機的「下載」資料夾，可以直接從那裡傳送。";
+    }
+  };
+}
 
 /* ---------- 頁面三：點名表產生 ---------- */
 const ATT_TEMPLATE_PATH = "templates/template_attendance.xlsx";
@@ -1217,15 +1237,7 @@ document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
     status.className = "";
     status.textContent = `已產生 ${y}年${m}月點名表，共 ${dates.length} 天、${students.length} 位學生。`;
 
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      shareBtn.style.display = "block";
-      shareBtn.onclick = async ()=>{
-        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 點名表"}); }
-        catch(err){ /* 使用者取消分享，屬正常操作 */ }
-      };
-    }else{
-      shareBtn.style.display = "none";
-    }
+    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
@@ -1831,8 +1843,10 @@ function writeCurriculumRowsIntoSheet(sheetXml, templateRows, curriculumRows, su
   return sheetXml;
 }
 
-async function generateProgressReport(names){
+async function generateProgressReport(names, selectedSubjects){
   const N = names.length;
+  // selectedSubjects：要產生的科目代號陣列（"國","數","社","自"）；沒傳就是全部
+  const wantedSubjects = (selectedSubjects && selectedSubjects.length) ? selectedSubjects : ["國","數","社","自"];
   await ensureCurriculumLoaded(); // 確保CurriculumData存在（含首次使用時的seed），不管老師有沒有先開過教材管理分頁
 
   const resp = await fetch(encodeURI(PROGRESS_TEMPLATE_PATH));
@@ -1955,6 +1969,7 @@ async function generateProgressReport(names){
     const sheetPath = PROGRESS_SHEET_PATHS[sheetIdx];
     let originalSheetXml = originalSheetXmls[sheetPath];
     const subj = CURRICULUM_SUBJECTS[sheetIdx];
+    if(!wantedSubjects.includes(subj)) continue; // 老師沒勾選的科目：完全不處理，保留範本原樣（最後會被隱藏）
     const midBlock = getCurriculumBlock(subj, "期中");
     const endBlock = getCurriculumBlock(subj, "期末");
     if(!midBlock || !endBlock){
@@ -2115,6 +2130,76 @@ async function generateProgressReport(names){
     wbXml = wbXml.replace(printAreaRe, (m, pre, oldRow, post) => `${pre}${finalCol}$${newPrintAreaLastRow}${post}`);
   }
 
+  // 沒勾選的科目：把整個分頁從檔案裡真正移除（不是隱藏——隱藏的分頁在LibreOffice/
+  // 部分預覽程式仍會被印出來）。移除時要一併處理：workbook.xml的<sheet>項目、
+  // 屬於該分頁的definedNames（Print_Area/Print_Titles）、其餘分頁的localSheetId
+  // 重新編號、workbook.xml.rels關聯、[Content_Types].xml、分頁自己的rels與
+  // printerSettings、docProps/app.xml裡的分頁名稱清單。
+  const keptIdx = CURRICULUM_SUBJECTS.map((s,i)=>i).filter(i => wantedSubjects.includes(CURRICULUM_SUBJECTS[i]));
+  if(keptIdx.length < CURRICULUM_SUBJECTS.length){
+    const relsPath = "xl/_rels/workbook.xml.rels";
+    let relsXml = await zip.file(relsPath).async("string");
+    let ctXml = await zip.file("[Content_Types].xml").async("string");
+
+    const sheetTags = wbXml.match(/<sheet [^>]*\/>/g) || [];
+    if(sheetTags.length !== CURRICULUM_SUBJECTS.length){
+      throw new Error("範本內部結構跟預期不同（分頁數量不是4個），無法只輸出部分科目。");
+    }
+    for(let i = 0; i < sheetTags.length; i++){
+      if(keptIdx.includes(i)) continue;
+      const rId = (sheetTags[i].match(/r:id="([^"]+)"/) || [])[1];
+      const relRe = new RegExp(`<Relationship [^>]*Id="${rId}"[^>]*/>`);
+      const relTag = (relsXml.match(relRe) || [])[0] || "";
+      const target = (relTag.match(/Target="([^"]+)"/) || [])[1]; // 例如 worksheets/sheet2.xml
+      wbXml = wbXml.replace(sheetTags[i], "");
+      relsXml = relsXml.replace(relRe, "");
+      if(target){
+        const partPath = "xl/" + target;
+        ctXml = ctXml.replace(new RegExp(`<Override PartName="/${partPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "");
+        const sheetRelsPath = partPath.replace("worksheets/", "worksheets/_rels/") + ".rels";
+        const sheetRelsFile = zip.file(sheetRelsPath);
+        if(sheetRelsFile){
+          const sr = await sheetRelsFile.async("string");
+          for(const m of sr.matchAll(/Target="\.\.\/printerSettings\/([^"]+)"/g)){
+            zip.remove("xl/printerSettings/" + m[1]);
+          }
+          zip.remove(sheetRelsPath);
+        }
+        zip.remove(partPath);
+      }
+    }
+    // definedNames：刪掉被移除分頁的，其餘依新順序重新編號
+    wbXml = wbXml.replace(/<definedName [^>]*localSheetId="(\d+)"[^>]*>[\s\S]*?<\/definedName>/g, (m, id) => {
+      const k = keptIdx.indexOf(parseInt(id, 10));
+      return k < 0 ? "" : m.replace(`localSheetId="${id}"`, `localSheetId="${k}"`);
+    });
+    // 目前選取的分頁回到第一個
+    wbXml = wbXml.replace(/<workbookView ([^>]*?)\/>/, (m, attrs) => {
+      const cleaned = attrs.replace(/\s*activeTab="\d+"/, "").replace(/\s*firstSheet="\d+"/, "");
+      return `<workbookView ${cleaned} activeTab="0"/>`;
+    });
+    // app.xml 的分頁名稱清單會跟實際不一致，直接移除這兩個區塊（Excel會自己重建）
+    const appFile = zip.file("docProps/app.xml");
+    if(appFile){
+      let appXml = await appFile.async("string");
+      appXml = appXml.replace(/<HeadingPairs>[\s\S]*?<\/HeadingPairs>/, "").replace(/<TitlesOfParts>[\s\S]*?<\/TitlesOfParts>/, "");
+      zip.file("docProps/app.xml", appXml);
+    }
+    zip.file(relsPath, relsXml);
+    zip.file("[Content_Types].xml", ctXml);
+
+    // 剩下的分頁：只讓第一個保持選取狀態
+    let first = true;
+    for(const i of keptIdx){
+      const f = zip.file(PROGRESS_SHEET_PATHS[i]);
+      if(!f) continue;
+      let x = await f.async("string");
+      x = x.replace(/\s*tabSelected="1"/, "");
+      if(first){ x = x.replace(/<sheetView /, '<sheetView tabSelected="1" '); first = false; }
+      zip.file(PROGRESS_SHEET_PATHS[i], x);
+    }
+  }
+
   zip.file(PROGRESS_WORKBOOK_PATH, wbXml);
   zip.file(PROGRESS_STYLES_PATH, stylesXml);
   return zip;
@@ -2127,11 +2212,12 @@ async function generateProgressReport(names){
 // 選取」的那一組，否則會跟真正的產出範圍不一致。這裡純粹讀取記憶體中的
 // curriculumData算數字，不會建立workbook、不會讀範本、不會寫入
 // CurriculumData、不會產生任何檔案。
-function buildProgressSummaryData(){
+function buildProgressSummaryData(selectedSubjects){
   const groups = [];
   let totalRows = 0;
   let totalImportant = 0;
   for(const subj of CURRICULUM_SUBJECTS){
+    if(selectedSubjects && !selectedSubjects.includes(subj)) continue;
     for(const term of ["期中", "期末"]){
       const block = getCurriculumBlock(subj, term);
       const rows = block ? block.rows : [];
@@ -2144,10 +2230,10 @@ function buildProgressSummaryData(){
   return { groups, totalRows, totalImportant };
 }
 
-function buildProgressConfirmMessage(){
-  const { groups, totalRows, totalImportant } = buildProgressSummaryData();
+function buildProgressConfirmMessage(selectedSubjects){
+  const { groups, totalRows, totalImportant } = buildProgressSummaryData(selectedSubjects);
   const lines = groups.map(g => `${CURRICULUM_SUBJECT_LABELS[g.subject] || g.subject}－${g.term}：${g.count}筆（重要${g.important}筆）`);
-  return `本次將產生全部科目／期別的進度追蹤表：\n\n${lines.join("\n")}\n\n合計：教材共${totalRows}筆，重要教材${totalImportant}筆\n\n確定要產生進度追蹤表嗎？`;
+  return `本次將產生以下科目的進度追蹤表：\n\n${lines.join("\n")}\n\n合計：教材共${totalRows}筆，重要教材${totalImportant}筆\n\n確定要產生進度追蹤表嗎？`;
 }
 
 document.getElementById("progressGenerateBtn").addEventListener("click", async ()=>{
@@ -2173,14 +2259,21 @@ document.getElementById("progressGenerateBtn").addEventListener("click", async (
   // 老師的編輯。這一步只讀資料算數字、跳出瀏覽器原生confirm()，完全不會
   // 建立workbook/讀範本/寫入CurriculumData/產生檔案；按下「取消」會直接
   // return，不會執行到下面任何Excel相關程式碼，資料/Undo堆疊都不受影響。
+  const selectedSubjects = Array.from(document.querySelectorAll('input[name="progressSubject"]:checked')).map(el=>el.value);
+  if(selectedSubjects.length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "請至少勾選一個科目。";
+    return;
+  }
   await ensureCurriculumLoaded();
-  if(!confirm(buildProgressConfirmMessage())) return;
+  if(!confirm(buildProgressConfirmMessage(selectedSubjects))) return;
 
   genBtn.disabled = true;
   genBtn.textContent = "產生中…";
 
   try{
-    const zip = await generateProgressReport(names);
+    const zip = await generateProgressReport(names, selectedSubjects);
     const outBuf = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 
     const today = new Date();
@@ -2194,17 +2287,9 @@ document.getElementById("progressGenerateBtn").addEventListener("click", async (
 
     status.style.display = "block";
     status.className = "";
-    status.textContent = `已產生進度追蹤表，共 ${names.length} 位學生（國/數/社/自四科）。`;
+    status.textContent = `已產生進度追蹤表，共 ${names.length} 位學生（${selectedSubjects.map(x=>CURRICULUM_SUBJECT_LABELS[x]).join("、")}）。`;
 
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      shareBtn.style.display = "block";
-      shareBtn.onclick = async ()=>{
-        try{ await navigator.share({files:[file], title:fname, text:"丹尼互動美語 - 進度追蹤表"}); }
-        catch(err){ /* 使用者取消分享，屬正常操作 */ }
-      };
-    }else{
-      shareBtn.style.display = "none";
-    }
+    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
