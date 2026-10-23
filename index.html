@@ -194,18 +194,6 @@
     margin-top:4px;
   }
   .primary-btn:disabled{opacity:.5;}
-  .share-btn{
-    width:100%;
-    padding:14px;
-    border:none;
-    border-radius:10px;
-    background:var(--ok);
-    color:#fff;
-    font-size:16px;
-    font-weight:700;
-    margin-top:10px;
-    display:none;
-  }
   #status{
     font-size:13px;
     color:#666;
@@ -491,7 +479,6 @@
       </div>
 
       <button class="primary-btn" id="generateBtn" type="button">產生並下載名條 (.xlsx)</button>
-      <button class="share-btn" id="shareBtn" type="button">分享到 Drive / LINE / Email</button>
       <div id="status"></div>
     </div>
   </section>
@@ -510,7 +497,6 @@
       <div class="workday-list" id="workdayList"></div>
 
       <button class="primary-btn" id="attGenerateBtn" type="button">產生並下載點名表 (.xlsx)</button>
-      <button class="share-btn" id="attShareBtn" type="button">分享到 Drive / LINE / Email</button>
       <div id="attStatus"></div>
     </div>
   </section>
@@ -528,7 +514,6 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="progressSubject" value="自" checked> 自然</label>
       </div>
       <button class="primary-btn" id="progressGenerateBtn" type="button">產生並下載進度追蹤表 (.xlsx)</button>
-      <button class="share-btn" id="progressShareBtn" type="button">分享到 Drive / LINE / Email</button>
       <div id="progressStatus"></div>
     </div>
   </section>
@@ -826,7 +811,6 @@ document.getElementById("copiesHorizontal").addEventListener("input", clampMixed
 
 document.getElementById("generateBtn").addEventListener("click", async ()=>{
   const status = document.getElementById("status");
-  const shareBtn = document.getElementById("shareBtn");
   const genBtn = document.getElementById("generateBtn");
   const mode = document.querySelector('input[name="orientation"]:checked').value;
 
@@ -920,9 +904,8 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
 
     status.style.display = "block";
     status.className = "";
-    status.textContent = `已產生 ${names.length} 位學生的名條（${mode === "both" ? `直書${vCopies}份＋橫書${hCopies}份` : (mode==="vertical"?`直書${vCopies}份`:`橫書${hCopies}份`)}）。`;
+    status.textContent = `已下載到手機「下載」資料夾：${names.length} 位學生的名條（${mode === "both" ? `直書${vCopies}份＋橫書${hCopies}份` : (mode==="vertical"?`直書${vCopies}份`:`橫書${hCopies}份`)}）。`;
 
-    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
@@ -933,46 +916,6 @@ document.getElementById("generateBtn").addEventListener("click", async ()=>{
     genBtn.textContent = "產生並下載名條 (.xlsx)";
   }
 });
-
-/* ---------- 共用：分享按鈕 ---------- */
-// 使用者取消分享（AbortError）屬正常操作，不顯示錯誤；其他錯誤一律顯示在畫面上，
-// 不再默默吞掉（之前吞掉錯誤，導致按了沒反應卻不知道原因）。
-function setupShareButton(shareBtn, file, status){
-  if(!(navigator.canShare && navigator.canShare({files:[file]}))){
-    shareBtn.style.display = "none";
-    return;
-  }
-  shareBtn.style.display = "block";
-
-  // 某些Android瀏覽器/手機會對特定檔名或檔案類型回傳 NotAllowedError，
-  // 所以失敗時依序換幾種方式重試：①原檔名 ②純英文檔名 ③通用檔案類型。
-  const ext = (file.name.match(/\.[^.]+$/) || [".xlsx"])[0];
-  const variants = [
-    () => file,
-    () => new File([file], "document_" + Date.now() + ext, {type: file.type}),
-    () => new File([file], "document_" + Date.now() + ext, {type: "application/octet-stream"})
-  ];
-
-  shareBtn.onclick = async ()=>{
-    const errors = [];
-    for(const make of variants){
-      let f;
-      try{ f = make(); }catch(e){ continue; }
-      if(!(navigator.canShare && navigator.canShare({files:[f]}))) continue;
-      try{
-        await navigator.share({files:[f]});
-        status.style.display = "none";
-        return; // 成功
-      }catch(err){
-        if(err && err.name === "AbortError") return; // 使用者自己取消
-        errors.push((err && err.name) + ":" + (err && err.message));
-      }
-    }
-    status.style.display = "block";
-    status.className = "error";
-    status.textContent = "這支手機/瀏覽器不允許直接分享這個檔案（" + (errors[0] || "未知錯誤") + "）。檔案已經下載到手機的「下載」資料夾，請打開「檔案」App，長按該檔案選「分享」，就能傳到 LINE / Drive / Email。";
-  };
-}
 
 /* ---------- 頁面三：點名表產生 ---------- */
 const ATT_TEMPLATE_PATH = "templates/template_attendance.xlsx";
@@ -1108,7 +1051,6 @@ renderWorkdayList();
 
 document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
   const status = document.getElementById("attStatus");
-  const shareBtn = document.getElementById("attShareBtn");
   const genBtn = document.getElementById("attGenerateBtn");
 
   const checkedBoxes = [...document.querySelectorAll("#workdayList input[type=checkbox]:checked")];
@@ -1254,9 +1196,8 @@ document.getElementById("attGenerateBtn").addEventListener("click", async ()=>{
 
     status.style.display = "block";
     status.className = "";
-    status.textContent = `已產生 ${y}年${m}月點名表，共 ${dates.length} 天、${students.length} 位學生。`;
+    status.textContent = `已下載到手機「下載」資料夾：${y}年${m}月點名表，共 ${dates.length} 天、${students.length} 位學生。`;
 
-    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
@@ -2257,7 +2198,6 @@ function buildProgressConfirmMessage(selectedSubjects){
 
 document.getElementById("progressGenerateBtn").addEventListener("click", async ()=>{
   const status = document.getElementById("progressStatus");
-  const shareBtn = document.getElementById("progressShareBtn");
   const genBtn = document.getElementById("progressGenerateBtn");
 
   const names = students.map(s=>(s.name||"").trim()).filter(n=>n.length>0);
@@ -2306,9 +2246,8 @@ document.getElementById("progressGenerateBtn").addEventListener("click", async (
 
     status.style.display = "block";
     status.className = "";
-    status.textContent = `已產生進度追蹤表，共 ${names.length} 位學生（${selectedSubjects.map(x=>CURRICULUM_SUBJECT_LABELS[x]).join("、")}）。`;
+    status.textContent = `已下載到手機「下載」資料夾：進度追蹤表，共 ${names.length} 位學生（${selectedSubjects.map(x=>CURRICULUM_SUBJECT_LABELS[x]).join("、")}）。`;
 
-    setupShareButton(shareBtn, file, status);
 
   }catch(err){
     status.style.display = "block";
