@@ -194,7 +194,7 @@
     margin-top:4px;
   }
   .primary-btn:disabled{opacity:.5;}
-  #status{
+  #status, #attStatus, #progressStatus, #coverStatus{
     font-size:13px;
     color:#666;
     margin-top:10px;
@@ -204,7 +204,7 @@
     background:#F3F1EA;
     border-radius:8px;
   }
-  #status.error{color:#B23A5A; background:#FBECEF;}
+  #status.error, #attStatus.error, #progressStatus.error, #coverStatus.error{color:#B23A5A; background:#FBECEF;}
   .empty{text-align:center; color:#999; font-size:13px; padding:20px 0;}
 
   .month-picker{
@@ -577,6 +577,23 @@
     </div>
   </section>
 
+  <section class="page" id="page-cover">
+    <div class="card">
+      <h2>產生評量封面</h2>
+      <p class="sub">內容直接取自「教材管理」頁面的單元、內容、頁數（左邊期中、右邊期末），日期／成績／完成日留白給學生自己填。產生一份後，列印時依學生人數影印即可。</p>
+
+      <div class="field-label" style="margin:14px 0 6px;font-weight:700;">要產生哪些科目？</div>
+      <div id="coverSubjectPicker" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="coverSubject" value="國" checked> 國語</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="coverSubject" value="數" checked> 數學</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="coverSubject" value="社" checked> 社會</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:16px;"><input type="checkbox" name="coverSubject" value="自" checked> 自然</label>
+      </div>
+      <button class="primary-btn" id="coverGenerateBtn" type="button">產生並下載評量封面 (.xlsx)</button>
+      <div id="coverStatus"></div>
+    </div>
+  </section>
+
 </main>
 
 <nav class="tabbar">
@@ -594,6 +611,9 @@
   </button>
   <button type="button" data-page="progress" data-title="進度追蹤表">
     <span class="ic">📈</span>進度表
+  </button>
+  <button type="button" data-page="cover" data-title="評量封面">
+    <span class="ic">📝</span>封面
   </button>
 </nav>
 
@@ -1803,6 +1823,76 @@ function writeCurriculumRowsIntoSheet(sheetXml, templateRows, curriculumRows, su
   return sheetXml;
 }
 
+/* ---------- 共用：從多分頁Excel裡真正移除沒被選取的分頁 ---------- */
+// 一併處理：workbook.xml的<sheet>、屬於該分頁的definedNames（其餘重新編號
+// localSheetId）、workbook.xml.rels、[Content_Types].xml、分頁自己的rels與
+// printerSettings、docProps/app.xml的分頁名稱清單。回傳更新後的workbook.xml字串。
+// 不用「隱藏分頁」：LibreOffice轉PDF時隱藏的分頁仍會被印出來。
+async function pruneUnselectedSheets(zip, wbXml, keptIdx, sheetPaths){
+  const relsPath = "xl/_rels/workbook.xml.rels";
+  let relsXml = await zip.file(relsPath).async("string");
+  let ctXml = await zip.file("[Content_Types].xml").async("string");
+
+  const sheetTags = wbXml.match(/<sheet [^>]*\/>/g) || [];
+  if(sheetTags.length !== sheetPaths.length){
+    throw new Error("範本內部結構跟預期不同（分頁數量不是4個），無法只輸出部分科目。");
+  }
+  for(let i = 0; i < sheetTags.length; i++){
+    if(keptIdx.includes(i)) continue;
+    const rId = (sheetTags[i].match(/r:id="([^"]+)"/) || [])[1];
+    const relRe = new RegExp(`<Relationship [^>]*Id="${rId}"[^>]*/>`);
+    const relTag = (relsXml.match(relRe) || [])[0] || "";
+    const target = (relTag.match(/Target="([^"]+)"/) || [])[1]; // 例如 worksheets/sheet2.xml
+    wbXml = wbXml.replace(sheetTags[i], "");
+    relsXml = relsXml.replace(relRe, "");
+    if(target){
+      const partPath = "xl/" + target;
+      ctXml = ctXml.replace(new RegExp(`<Override PartName="/${partPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "");
+      const sheetRelsPath = partPath.replace("worksheets/", "worksheets/_rels/") + ".rels";
+      const sheetRelsFile = zip.file(sheetRelsPath);
+      if(sheetRelsFile){
+        const sr = await sheetRelsFile.async("string");
+        for(const m of sr.matchAll(/Target="\.\.\/printerSettings\/([^"]+)"/g)){
+          zip.remove("xl/printerSettings/" + m[1]);
+        }
+        zip.remove(sheetRelsPath);
+      }
+      zip.remove(partPath);
+    }
+  }
+  // definedNames：刪掉被移除分頁的，其餘依新順序重新編號
+  wbXml = wbXml.replace(/<definedName [^>]*localSheetId="(\d+)"[^>]*>[\s\S]*?<\/definedName>/g, (m, id) => {
+    const k = keptIdx.indexOf(parseInt(id, 10));
+    return k < 0 ? "" : m.replace(`localSheetId="${id}"`, `localSheetId="${k}"`);
+  });
+  // 目前選取的分頁回到第一個
+  wbXml = wbXml.replace(/<workbookView ([^>]*?)\/>/, (m, attrs) => {
+    const cleaned = attrs.replace(/\s*activeTab="\d+"/, "").replace(/\s*firstSheet="\d+"/, "");
+    return `<workbookView ${cleaned} activeTab="0"/>`;
+  });
+  // app.xml 的分頁名稱清單會跟實際不一致，直接移除這兩個區塊（Excel會自己重建）
+  const appFile = zip.file("docProps/app.xml");
+  if(appFile){
+    let appXml = await appFile.async("string");
+    appXml = appXml.replace(/<HeadingPairs>[\s\S]*?<\/HeadingPairs>/, "").replace(/<TitlesOfParts>[\s\S]*?<\/TitlesOfParts>/, "");
+    zip.file("docProps/app.xml", appXml);
+  }
+  zip.file(relsPath, relsXml);
+  zip.file("[Content_Types].xml", ctXml);
+
+  // 剩下的分頁：只讓第一個保持選取狀態
+  let first = true;
+  for(const i of keptIdx){
+    const f = zip.file(sheetPaths[i]);
+    if(!f) continue;
+    let x = await f.async("string");
+    x = x.replace(/\s*tabSelected="1"/, "");
+    if(first){ x = x.replace(/<sheetView /, '<sheetView tabSelected="1" '); first = false; }
+    zip.file(sheetPaths[i], x);
+  }
+  return wbXml;
+}
+
 async function generateProgressReport(names, selectedSubjects){
   const N = names.length;
   // selectedSubjects：要產生的科目代號陣列（"國","數","社","自"）；沒傳就是全部
@@ -2090,74 +2180,10 @@ async function generateProgressReport(names, selectedSubjects){
     wbXml = wbXml.replace(printAreaRe, (m, pre, oldRow, post) => `${pre}${finalCol}$${newPrintAreaLastRow}${post}`);
   }
 
-  // 沒勾選的科目：把整個分頁從檔案裡真正移除（不是隱藏——隱藏的分頁在LibreOffice/
-  // 部分預覽程式仍會被印出來）。移除時要一併處理：workbook.xml的<sheet>項目、
-  // 屬於該分頁的definedNames（Print_Area/Print_Titles）、其餘分頁的localSheetId
-  // 重新編號、workbook.xml.rels關聯、[Content_Types].xml、分頁自己的rels與
-  // printerSettings、docProps/app.xml裡的分頁名稱清單。
+  // 沒勾選的科目：整個分頁從檔案裡真正移除（共用函式，評量封面也用同一份邏輯）
   const keptIdx = CURRICULUM_SUBJECTS.map((s,i)=>i).filter(i => wantedSubjects.includes(CURRICULUM_SUBJECTS[i]));
   if(keptIdx.length < CURRICULUM_SUBJECTS.length){
-    const relsPath = "xl/_rels/workbook.xml.rels";
-    let relsXml = await zip.file(relsPath).async("string");
-    let ctXml = await zip.file("[Content_Types].xml").async("string");
-
-    const sheetTags = wbXml.match(/<sheet [^>]*\/>/g) || [];
-    if(sheetTags.length !== CURRICULUM_SUBJECTS.length){
-      throw new Error("範本內部結構跟預期不同（分頁數量不是4個），無法只輸出部分科目。");
-    }
-    for(let i = 0; i < sheetTags.length; i++){
-      if(keptIdx.includes(i)) continue;
-      const rId = (sheetTags[i].match(/r:id="([^"]+)"/) || [])[1];
-      const relRe = new RegExp(`<Relationship [^>]*Id="${rId}"[^>]*/>`);
-      const relTag = (relsXml.match(relRe) || [])[0] || "";
-      const target = (relTag.match(/Target="([^"]+)"/) || [])[1]; // 例如 worksheets/sheet2.xml
-      wbXml = wbXml.replace(sheetTags[i], "");
-      relsXml = relsXml.replace(relRe, "");
-      if(target){
-        const partPath = "xl/" + target;
-        ctXml = ctXml.replace(new RegExp(`<Override PartName="/${partPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*/>`), "");
-        const sheetRelsPath = partPath.replace("worksheets/", "worksheets/_rels/") + ".rels";
-        const sheetRelsFile = zip.file(sheetRelsPath);
-        if(sheetRelsFile){
-          const sr = await sheetRelsFile.async("string");
-          for(const m of sr.matchAll(/Target="\.\.\/printerSettings\/([^"]+)"/g)){
-            zip.remove("xl/printerSettings/" + m[1]);
-          }
-          zip.remove(sheetRelsPath);
-        }
-        zip.remove(partPath);
-      }
-    }
-    // definedNames：刪掉被移除分頁的，其餘依新順序重新編號
-    wbXml = wbXml.replace(/<definedName [^>]*localSheetId="(\d+)"[^>]*>[\s\S]*?<\/definedName>/g, (m, id) => {
-      const k = keptIdx.indexOf(parseInt(id, 10));
-      return k < 0 ? "" : m.replace(`localSheetId="${id}"`, `localSheetId="${k}"`);
-    });
-    // 目前選取的分頁回到第一個
-    wbXml = wbXml.replace(/<workbookView ([^>]*?)\/>/, (m, attrs) => {
-      const cleaned = attrs.replace(/\s*activeTab="\d+"/, "").replace(/\s*firstSheet="\d+"/, "");
-      return `<workbookView ${cleaned} activeTab="0"/>`;
-    });
-    // app.xml 的分頁名稱清單會跟實際不一致，直接移除這兩個區塊（Excel會自己重建）
-    const appFile = zip.file("docProps/app.xml");
-    if(appFile){
-      let appXml = await appFile.async("string");
-      appXml = appXml.replace(/<HeadingPairs>[\s\S]*?<\/HeadingPairs>/, "").replace(/<TitlesOfParts>[\s\S]*?<\/TitlesOfParts>/, "");
-      zip.file("docProps/app.xml", appXml);
-    }
-    zip.file(relsPath, relsXml);
-    zip.file("[Content_Types].xml", ctXml);
-
-    // 剩下的分頁：只讓第一個保持選取狀態
-    let first = true;
-    for(const i of keptIdx){
-      const f = zip.file(PROGRESS_SHEET_PATHS[i]);
-      if(!f) continue;
-      let x = await f.async("string");
-      x = x.replace(/\s*tabSelected="1"/, "");
-      if(first){ x = x.replace(/<sheetView /, '<sheetView tabSelected="1" '); first = false; }
-      zip.file(PROGRESS_SHEET_PATHS[i], x);
-    }
+    wbXml = await pruneUnselectedSheets(zip, wbXml, keptIdx, PROGRESS_SHEET_PATHS);
   }
 
   zip.file(PROGRESS_WORKBOOK_PATH, wbXml);
@@ -2926,6 +2952,203 @@ document.getElementById("importCurriculumFile").addEventListener("change", async
 document.getElementById("curriculumGoToProgressBtn").addEventListener("click", () => {
   const progressTabBtn = document.querySelector('.tabbar button[data-page="progress"]');
   if(progressTabBtn) progressTabBtn.click();
+});
+
+/* ---------- 頁面六：評量封面產生 ---------- */
+// 範本結構（4個分頁：國語/數學/社會/自然，A4橫向，各一頁）：
+//   第1列 標題（國評…）、第2列 表頭、第3列起是教材資料列。
+//   左半邊 A~F = 期中（單元/內容/頁數/日期/成績/完成日），右半邊 H~M = 期末；
+//   左右兩個區塊共用同一批列，列數 = 兩者較多的那一邊，最後一列是帶粗底線的收尾列。
+//   日期/成績/完成日三欄保留空白給學生自己寫。
+// 教材內容完全取自CurriculumData（跟進度追蹤表同一份資料來源），粗體由important決定。
+const COVER_TEMPLATE_PATH = "templates/template_assessment_cover.xlsx";
+const COVER_SHEET_PATHS = ["xl/worksheets/sheet1.xml","xl/worksheets/sheet2.xml","xl/worksheets/sheet3.xml","xl/worksheets/sheet4.xml"];
+const COVER_LEFT_COLS = ["A","B","C","D","E","F"];
+const COVER_RIGHT_COLS = ["H","I","J","K","L","M"];
+
+function coverRowStyles(sheetXml, rowNum){
+  const m = sheetXml.match(new RegExp(`<row r="${rowNum}"[^>]*>[\\s\\S]*?</row>`));
+  if(!m) return null;
+  const styles = {};
+  for(const col of [...COVER_LEFT_COLS, ...COVER_RIGHT_COLS]){
+    const c = m[0].match(new RegExp(`<c r="${col}${rowNum}"(?: s="(\\d+)")?`));
+    if(!c) return null;
+    styles[col] = c[1] || "0";
+  }
+  return { styles, rowOpen: m[0].match(/<row [^>]*>/)[0] };
+}
+
+function buildCoverBlockCells(cols, curRow, prevUnit, rowNum, styles, boldStyleOf){
+  // 回傳 {xml, unit}：unit給呼叫端記錄「上一列的單元」，同單元只在第一列顯示
+  // 字型沿用封面範本自己的字型（微軟正黑體），不套用進度表的標楷體設定；
+  // 重要列只換成「同樣外觀、字型改粗體」的樣式。
+  const unitText = curRow ? toCurriculumDisplayText(curRow.unit) : "";
+  const displayUnit = (curRow && unitText !== prevUnit) ? unitText : "";
+  const texts = curRow
+    ? [displayUnit, toCurriculumDisplayText(curRow.content), toCurriculumDisplayText(curRow.pages), "", "", ""]
+    : ["", "", "", "", "", ""];
+  let xml = "";
+  cols.forEach((col, i) => {
+    let sid = styles[col];
+    const text = texts[i];
+    if(text){
+      if(curRow && curRow.important) sid = boldStyleOf(sid);
+      xml += `<c r="${col}${rowNum}" s="${sid}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(text)}</t></is></c>`;
+    }else{
+      xml += `<c r="${col}${rowNum}" s="${sid}"/>`;
+    }
+  });
+  return { xml, unit: curRow ? unitText : prevUnit };
+}
+
+async function generateAssessmentCover(selectedSubjects){
+  const wanted = (selectedSubjects && selectedSubjects.length) ? selectedSubjects : ["國","數","社","自"];
+  await ensureCurriculumLoaded();
+
+  const resp = await fetch(encodeURI(COVER_TEMPLATE_PATH));
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_assessment_cover.xlsx`);
+  const zip = await JSZip.loadAsync(await resp.arrayBuffer());
+
+  const wbFile = zip.file("xl/workbook.xml");
+  const stylesFile = zip.file("xl/styles.xml");
+  if(!wbFile || !stylesFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+  let wbXml = await wbFile.async("string");
+  let stylesXml = await stylesFile.async("string");
+  const xfList = parseCellXfsList(stylesXml);
+  const fontsList = parseFontsList(stylesXml);
+
+  // 「同外觀但粗體」的樣式：找範本裡「字型內容相同、只多一個<b/>」的字型，複製原樣式
+  // 並把fontId換過去，附加到cellXfs尾端；找不到對應粗體字型就維持原樣式（不加粗）。
+  const boldCache = new Map();
+  const newXfs = [];
+  function boldStyleOf(sid){
+    if(boldCache.has(sid)) return boldCache.get(sid);
+    let result = sid;
+    const xf = xfList[parseInt(sid, 10)];
+    const fm = xf && xf.match(/fontId="(\d+)"/);
+    if(fm){
+      const baseFont = fontsList[parseInt(fm[1], 10)] || "";
+      if(/<b\s*\/>/.test(baseFont)){
+        result = sid; // 本來就是粗體
+      }else{
+        const boldFont = baseFont.replace("<font>", "<font><b/>");
+        const boldIdx = fontsList.findIndex(f => f === boldFont);
+        if(boldIdx >= 0){
+          let nx = xf.replace(/fontId="\d+"/, `fontId="${boldIdx}"`);
+          if(!/applyFont="/.test(nx)) nx = nx.replace(/^<xf /, '<xf applyFont="1" ');
+          newXfs.push(nx);
+          result = String(xfList.length + newXfs.length - 1);
+        }
+      }
+    }
+    boldCache.set(sid, result);
+    return result;
+  }
+
+  for(let sheetIdx = 0; sheetIdx < COVER_SHEET_PATHS.length; sheetIdx++){
+    const subj = CURRICULUM_SUBJECTS[sheetIdx];
+    if(!wanted.includes(subj)) continue;
+    const midBlock = getCurriculumBlock(subj, "期中");
+    const endBlock = getCurriculumBlock(subj, "期末");
+    if(!midBlock || !endBlock){
+      throw new Error(`找不到教材資料（${subj}科目的期中/期末），請先到「教材管理」分頁確認資料存在後再產生評量封面。`);
+    }
+    const sheetPath = COVER_SHEET_PATHS[sheetIdx];
+    const sheetFile = zip.file(sheetPath);
+    if(!sheetFile) throw new Error(`範本結構與預期不符：找不到 ${sheetPath}`);
+    let sheetXml = await sheetFile.async("string");
+
+    // 樣式取樣：一般資料列用範本第4列，收尾列用範本最後一個資料列
+    // 範本尾端可能有沒有內容的空白列，所以「最後一個資料列」要看A欄實際有儲存格的最大列號
+    const rowNums = [...sheetXml.matchAll(/<c r="A(\d+)"/g)].map(m => parseInt(m[1], 10));
+    const lastTemplateRow = Math.max(...rowNums);
+    const normal = coverRowStyles(sheetXml, 4) || coverRowStyles(sheetXml, 3);
+    const closing = coverRowStyles(sheetXml, lastTemplateRow);
+    if(!normal || !closing){
+      throw new Error(`範本結構與預期不符（${subj}科目的資料列欄位不完整），為避免猜測性修改已停止產生，請回報這個訊息。`);
+    }
+
+    const midRows = midBlock.rows, endRows = endBlock.rows;
+    const N = Math.max(midRows.length, endRows.length, 1);
+    let rowsXml = "";
+    let prevL = null, prevR = null;
+    for(let i = 0; i < N; i++){
+      const rowNum = 3 + i;
+      const isLast = (i === N - 1);
+      const src = isLast ? closing : normal;
+      const left = buildCoverBlockCells(COVER_LEFT_COLS, midRows[i], prevL, rowNum, src.styles, boldStyleOf);
+      const right = buildCoverBlockCells(COVER_RIGHT_COLS, endRows[i], prevR, rowNum, src.styles, boldStyleOf);
+      prevL = left.unit; prevR = right.unit;
+      const open = normal.rowOpen.replace(/r="\d+"/, `r="${rowNum}"`);
+      rowsXml += `${open}${left.xml}${right.xml}</row>`;
+    }
+
+    // 保留範本第1~2列（標題/表頭），第3列起整批換成新產生的
+    const keepHead = [...sheetXml.matchAll(/<row r="(\d+)"[^>]*>[\s\S]*?<\/row>/g)]
+      .filter(m => parseInt(m[1], 10) <= 2).map(m => m[0]).join("");
+    sheetXml = sheetXml.replace(/<sheetData>[\s\S]*<\/sheetData>/, () => `<sheetData>${keepHead}${rowsXml}</sheetData>`);
+
+    const lastRow = 2 + N;
+    sheetXml = sheetXml.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:M${lastRow}"/>`);
+    // 一頁放得下：教材筆數被改多時自動縮放，不會被切到第二頁
+    sheetXml = sheetXml.replace(/<sheetPr>([\s\S]*?)<\/sheetPr>/, (m, inner) => `<sheetPr>${inner}<pageSetUpPr fitToPage="1"/></sheetPr>`);
+    sheetXml = sheetXml.replace(/fitToWidth="0" fitToHeight="0"/, 'fitToWidth="1" fitToHeight="1"');
+    zip.file(sheetPath, sheetXml);
+
+    // 列印範圍：範本是「最後一個資料列再加1列」
+    const printRe = new RegExp(`(localSheetId="${sheetIdx}">[^<]*\\$A\\$1:\\$M\\$)\\d+(</definedName>)`);
+    if(printRe.test(wbXml)){
+      wbXml = wbXml.replace(printRe, (m, pre, post) => `${pre}${lastRow + 1}${post}`);
+    }
+  }
+
+  const keptIdx = CURRICULUM_SUBJECTS.map((x,i)=>i).filter(i => wanted.includes(CURRICULUM_SUBJECTS[i]));
+  if(keptIdx.length < COVER_SHEET_PATHS.length){
+    wbXml = await pruneUnselectedSheets(zip, wbXml, keptIdx, COVER_SHEET_PATHS);
+  }
+  if(newXfs.length){
+    stylesXml = stylesXml.replace(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/, (m, cnt, inner) =>
+      `<cellXfs count="${parseInt(cnt, 10) + newXfs.length}">${inner}${newXfs.join("")}</cellXfs>`);
+    zip.file("xl/styles.xml", stylesXml);
+  }
+  zip.file("xl/workbook.xml", wbXml);
+  return zip;
+}
+
+document.getElementById("coverGenerateBtn").addEventListener("click", async ()=>{
+  const status = document.getElementById("coverStatus");
+  const genBtn = document.getElementById("coverGenerateBtn");
+  status.style.display = "none";
+  status.className = "";
+  const selected = Array.from(document.querySelectorAll('input[name="coverSubject"]:checked')).map(el=>el.value);
+  if(selected.length === 0){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "請至少勾選一個科目。";
+    return;
+  }
+  genBtn.disabled = true;
+  genBtn.textContent = "產生中…";
+  try{
+    const zip = await generateAssessmentCover(selected);
+    const outBuf = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const t = new Date();
+    const fname = `評量封面_${t.getFullYear()}${String(t.getMonth()+1).padStart(2,"0")}${String(t.getDate()).padStart(2,"0")}.xlsx`;
+    const url = URL.createObjectURL(outBuf);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    status.style.display = "block";
+    status.className = "";
+    status.textContent = `已下載到手機「下載」資料夾：評量封面（${selected.map(x=>CURRICULUM_SUBJECT_LABELS[x]).join("、")}）。`;
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "產生失敗：" + err.message;
+  }finally{
+    genBtn.disabled = false;
+    genBtn.textContent = "產生並下載評量封面 (.xlsx)";
+  }
 });
 
 /* ---------- 底部導覽切換 ---------- */
