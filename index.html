@@ -204,6 +204,24 @@
     background:#F3F1EA;
     border-radius:8px;
   }
+
+  /* ---- 通知單 ---- */
+  .sec-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;font-size:14px;color:#333;}
+  .preset-row, .add-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;}
+  .notice-fixed{color:#666;background:#F3F1EA;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:14px;}
+  .nb{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#fff;}
+  .nb-top{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .nb-type{font-weight:700;flex:1;font-size:14px;}
+  .nb-top button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;font-size:14px;}
+  .nb textarea, .nb input[type=text]{width:100%;box-sizing:border-box;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;}
+  .nb-opts{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:14px;}
+  .nb-opts label{display:flex;align-items:center;gap:5px;}
+  .slip-preview{border:1px solid #333;padding:8px 10px;font-size:14px;line-height:1.5;background:#fff;max-width:420px;}
+  .slip-preview .sp-bold{font-weight:700;}
+  .slip-preview .sp-right{text-align:right;}
+  .slip-preview p{margin:0;white-space:pre-wrap;}
+  #noticeStatus{font-size:13px;color:#666;margin-top:10px;line-height:1.6;display:none;padding:10px 12px;background:#F3F1EA;border-radius:8px;}
+  #noticeStatus.error{color:#B23A5A; background:#FBECEF;}
   #status.error, #attStatus.error, #progressStatus.error, #coverStatus.error{color:#B23A5A; background:#FBECEF;}
   .empty{text-align:center; color:#999; font-size:13px; padding:20px 0;}
 
@@ -403,10 +421,12 @@
   }
   nav.tabbar button{
     flex:1;
+    min-width:0;
+    white-space:nowrap;
     background:none;
     border:none;
-    padding:8px 4px;
-    font-size:12px;
+    padding:8px 1px;
+    font-size:11px;
     color:#999;
     display:flex;
     flex-direction:column;
@@ -594,6 +614,36 @@
     </div>
   </section>
 
+  <section class="page" id="page-notice">
+    <div class="card">
+      <h2>產生通知單</h2>
+      <p class="sub">每張小條開頭固定「親愛的家長，您好：」、結尾固定「丹尼中和分校 敬上」，中間內容自己組合。產生後會自動排滿一頁，印出來剪開發給家長，需要更多張再影印即可。</p>
+
+      <div class="field-label" style="margin:14px 0 4px;font-weight:700;">先挑一個常用內容（之後都可以修改）</div>
+      <div class="preset-row">
+        <button type="button" class="sec-btn" data-notice-preset="general">一般通知（寒假開始）</button>
+        <button type="button" class="sec-btn" data-notice-preset="winter">寒假作業發回</button>
+        <button type="button" class="sec-btn" data-notice-preset="blank">全部清空</button>
+      </div>
+
+      <div class="notice-fixed">親愛的家長，您好：</div>
+      <div id="noticeBlocks"></div>
+      <div class="add-row">
+        <button type="button" class="sec-btn" id="addNoticeP">＋ 一段文字</button>
+        <button type="button" class="sec-btn" id="addNoticeH">＋ 小標（粗體）</button>
+        <button type="button" class="sec-btn" id="addNoticeC">＋ 勾選項目</button>
+      </div>
+      <div class="notice-fixed" style="text-align:right;">丹尼中和分校 敬上</div>
+
+      <div class="field-label" style="margin:14px 0 4px;font-weight:700;">預覽（單張）</div>
+      <div class="slip-preview" id="noticePreview"></div>
+      <div class="hint" id="noticeHint" style="margin:8px 0 12px;"></div>
+
+      <button class="primary-btn" id="noticeGenerateBtn" type="button">產生並下載通知單 (.docx)</button>
+      <div id="noticeStatus"></div>
+    </div>
+  </section>
+
 </main>
 
 <nav class="tabbar">
@@ -614,6 +664,9 @@
   </button>
   <button type="button" data-page="cover" data-title="評量封面">
     <span class="ic">📝</span>封面
+  </button>
+  <button type="button" data-page="notice" data-title="通知單">
+    <span class="ic">✉️</span>通知單
   </button>
 </nav>
 
@@ -3150,6 +3203,296 @@ document.getElementById("coverGenerateBtn").addEventListener("click", async ()=>
     genBtn.textContent = "產生並下載評量封面 (.xlsx)";
   }
 });
+
+/* ---------- 頁面七：通知單產生 ---------- */
+// 範本：templates/template_notice_general.docx（一個2欄的表格，每個儲存格就是一張小條，
+// 開頭「親愛的家長，您好：」與結尾「丹尼中和分校 敬上」固定）。這裡只替換「中間內容」，
+// 並依內容長度估算每頁能放幾列，產生一整頁排滿的小條。
+// 寒假作業發回通知單的版面（粗體小標＋勾選項目）也由同一份範本＋「積木」組出來，
+// 不再另外維護第二份範本檔。
+//
+// 內容用三種積木組合：type "p"=一段文字、"h"=粗體小標、"c"=勾選項目
+// （checked=是否預先打勾；sameLine=跟上一個勾選項目排在同一行）。
+const NOTICE_TEMPLATE_PATH = "templates/template_notice_general.docx";
+const NOTICE_STORAGE_KEY = "danny_notice_v1";
+const NOTICE_PRESETS = {
+  general: [
+    {type:"p", text:"謝謝您在本學期的支持與配合。1/26(一)寒假開始，安親班於早上7:40就開門，9:00開始上課，請小朋友於「9點以前」務必到班，另外，請家長提醒孩子記得帶寒假作業、文具用品、水壺及午休枕被來哦！謝謝。"}
+  ],
+  winter: [
+    {type:"p", text:"今日發回寒假作業，請家長確認作業內容，並於「家長簽名」欄簽名後，提醒孩子妥善收好，於2/23(一)開學時帶回學校交給老師。"},
+    {type:"h", text:"安親班完成項目："},
+    {type:"c", text:"作文一篇", checked:false, sameLine:false},
+    {type:"c", text:"健康促進單", checked:false, sameLine:true},
+    {type:"c", text:"讀書報告(草稿)", checked:false, sameLine:true},
+    {type:"h", text:"需要家長協助項目："},
+    {type:"c", text:"健康自主管理表", checked:false, sameLine:false},
+    {type:"c", text:"E起去反毒(需用校園通APP完成)", checked:false, sameLine:false}
+  ],
+  blank: [ {type:"p", text:""} ]
+};
+
+function noticeClone(x){ return JSON.parse(JSON.stringify(x)); }
+function noticeNormalize(arr){
+  if(!Array.isArray(arr)) return null;
+  const out = [];
+  for(const b of arr){
+    if(!b || !["p","h","c"].includes(b.type)) continue;
+    out.push({
+      type: b.type,
+      text: typeof b.text === "string" ? b.text : "",
+      checked: !!b.checked,
+      sameLine: !!b.sameLine
+    });
+  }
+  return out.length ? out : null;
+}
+function loadNoticeBlocks(){
+  try{
+    const raw = localStorage.getItem(NOTICE_STORAGE_KEY);
+    if(raw){
+      const norm = noticeNormalize(JSON.parse(raw));
+      if(norm) return norm;
+    }
+  }catch(e){ /* 讀不到就用預設內容 */ }
+  return noticeClone(NOTICE_PRESETS.general);
+}
+function saveNoticeBlocks(){
+  try{ localStorage.setItem(NOTICE_STORAGE_KEY, JSON.stringify(noticeBlocks)); }catch(e){ /* 無痕模式等情況不影響使用 */ }
+}
+let noticeBlocks = loadNoticeBlocks();
+
+// 把積木整理成「段落」清單：連續的勾選項目若標了「同一行」就併成同一段
+function noticeBuildParagraphs(blocks){
+  const paras = [];
+  for(const b of blocks){
+    const text = (b.text || "").replace(/\r/g, "");
+    if(b.type === "p"){
+      paras.push({kind:"p", text});
+    }else if(b.type === "h"){
+      if(text.trim()) paras.push({kind:"h", text});
+    }else if(b.type === "c"){
+      if(!text.trim()) continue;
+      const item = {text: text.replace(/\n/g, " "), checked: !!b.checked};
+      const prev = paras[paras.length - 1];
+      if(b.sameLine && prev && prev.kind === "c") prev.items.push(item);
+      else paras.push({kind:"c", items:[item]});
+    }
+  }
+  return paras;
+}
+
+// 估算版面：中日文字／全形符號約12pt寬，英數字約7pt（保守估），一行可用寬度約252pt。
+const NOTICE_LINE_WIDTH_PT = 252;
+const NOTICE_LINE_HEIGHT_TW = 400;      // 一行約20pt（含保守餘裕，實測與原範本每頁列數一致）
+const NOTICE_PAGE_USABLE_TW = 16838 - 567*2 - 450; // A4高度－上下邊界－表格後面那個空白段落
+function noticeCharWidth(ch){
+  const c = ch.codePointAt(0);
+  if(c < 0x80){ return ch === " " ? 3.5 : 7; }
+  return 12;
+}
+function noticeCountLines(text){
+  let lines = 0;
+  for(const seg of text.split("\n")){
+    let w = 0, n = 1;
+    for(const ch of seg){
+      const cw = noticeCharWidth(ch);
+      if(w + cw > NOTICE_LINE_WIDTH_PT){ n++; w = cw; } else { w += cw; }
+    }
+    lines += n;
+  }
+  return lines;
+}
+function noticeParagraphText(para){
+  if(para.kind === "c") return para.items.map(it => "□ " + it.text).join(" ");
+  return para.text;
+}
+function noticeEstimate(blocks){
+  const paras = noticeBuildParagraphs(blocks);
+  let lines = 2; // 固定開頭＋固定結尾
+  for(const p of paras) lines += noticeCountLines(noticeParagraphText(p));
+  const slipTw = lines * NOTICE_LINE_HEIGHT_TW;
+  const rows = Math.max(1, Math.floor(NOTICE_PAGE_USABLE_TW / slipTw));
+  return {paras, lines, rows};
+}
+
+function noticeRunXml(text, opt){
+  opt = opt || {};
+  let rpr = "";
+  if(opt.symbol) rpr = '<w:rPr><w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol" w:eastAsia="MS Gothic" w:hint="eastAsia"/></w:rPr>';
+  else if(opt.bold) rpr = "<w:rPr><w:b/><w:bCs/></w:rPr>";
+  const inner = text.split("\n").map((t, i) => (i ? "<w:br/>" : "") + `<w:t xml:space="preserve">${escapeXml(t)}</w:t>`).join("");
+  return `<w:r>${rpr}${inner}</w:r>`;
+}
+function noticeParagraphXml(para){
+  let runs = "";
+  if(para.kind === "c"){
+    para.items.forEach((it, i) => {
+      runs += noticeRunXml(it.checked ? "☒" : "☐", {symbol:true});
+      runs += noticeRunXml(" " + it.text + (i < para.items.length - 1 ? " " : ""));
+    });
+  }else{
+    runs = para.text ? noticeRunXml(para.text, {bold: para.kind === "h"}) : "";
+  }
+  return `<w:p><w:pPr><w:overflowPunct w:val="0"/><w:snapToGrid w:val="0"/><w:jc w:val="both"/></w:pPr>${runs}</w:p>`;
+}
+
+async function generateNoticeDocx(blocks){
+  const est = noticeEstimate(blocks);
+  if(!est.paras.some(p => (p.kind === "c" ? p.items.length : p.text.trim()))){
+    throw new Error("請先輸入通知單的內容。");
+  }
+  const resp = await fetch(encodeURI(NOTICE_TEMPLATE_PATH));
+  if(!resp.ok) throw new Error(`讀不到範本檔案（狀態碼 ${resp.status}），請確認 templates 資料夾裡有 template_notice_general.docx`);
+  const zip = await JSZip.loadAsync(await resp.arrayBuffer());
+  const docFile = zip.file("word/document.xml");
+  if(!docFile) throw new Error("範本內部結構跟預期不同，請確認檔案沒有被另存或改過格式");
+  const xml = await docFile.async("string");
+
+  const tblStart = xml.indexOf("<w:tbl>");
+  const tblEnd = xml.indexOf("</w:tbl>");
+  if(tblStart < 0 || tblEnd < 0) throw new Error("範本結構與預期不符（找不到表格），請回報這個訊息。");
+  const head = xml.slice(tblStart).match(/^<w:tbl>(<w:tblPr>[\s\S]*?<\/w:tblPr>)(<w:tblGrid>[\s\S]*?<\/w:tblGrid>)/);
+  const firstCell = xml.slice(tblStart, tblEnd).match(/<w:tc>[\s\S]*?<\/w:tc>/);
+  if(!head || !firstCell) throw new Error("範本結構與預期不符（表格內容），請回報這個訊息。");
+  const tcPr = (firstCell[0].match(/<w:tcPr>[\s\S]*?<\/w:tcPr>/) || [""])[0];
+  const cellParas = firstCell[0].match(/<w:p [\s\S]*?<\/w:p>/g) || [];
+  if(cellParas.length < 2) throw new Error("範本結構與預期不符（找不到固定的開頭/結尾段落），請回報這個訊息。");
+  const headerP = cellParas[0];
+  const footerP = cellParas[cellParas.length - 1];
+
+  const cell = `<w:tc>${tcPr}${headerP}${est.paras.map(noticeParagraphXml).join("")}${footerP}</w:tc>`;
+  // cantSplit：萬一估算的列數偏多，整張小條會移到下一頁，不會被從中間切開
+  const row = `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell}${cell}</w:tr>`;
+  const tbl = `<w:tbl>${head[1]}${head[2]}${row.repeat(est.rows)}</w:tbl>`;
+  zip.file("word/document.xml", xml.slice(0, tblStart) + tbl + xml.slice(tblEnd + "</w:tbl>".length));
+  return {zip, rows: est.rows};
+}
+
+/* ----- 輸入畫面 ----- */
+function renderNoticePreview(){
+  const box = document.getElementById("noticePreview");
+  const hint = document.getElementById("noticeHint");
+  const est = noticeEstimate(noticeBlocks);
+  box.textContent = "";
+  const add = (cls, text) => { const p = document.createElement("p"); if(cls) p.className = cls; p.textContent = text; box.appendChild(p); };
+  add("", "親愛的家長，您好：");
+  for(const para of est.paras){
+    if(para.kind === "c") add("", para.items.map(it => (it.checked ? "☒ " : "☐ ") + it.text).join(" "));
+    else add(para.kind === "h" ? "sp-bold" : "", para.text);
+  }
+  add("sp-right", "丹尼中和分校 敬上");
+  hint.textContent = `產生後一頁會排滿 ${est.rows} 列、共 ${est.rows * 2} 張小條（以預估計算，實際以手機上的 Word/WPS 開啟為準）。`;
+}
+
+function renderNoticeBlocks(){
+  const wrap = document.getElementById("noticeBlocks");
+  wrap.textContent = "";
+  const TYPE_LABEL = {p:"一段文字", h:"小標（粗體）", c:"勾選項目"};
+  noticeBlocks.forEach((b, idx) => {
+    const box = document.createElement("div");
+    box.className = "nb";
+
+    const top = document.createElement("div");
+    top.className = "nb-top";
+    const label = document.createElement("span");
+    label.className = "nb-type";
+    label.textContent = TYPE_LABEL[b.type];
+    top.appendChild(label);
+    const mk = (txt, title, fn, disabled) => {
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = txt; btn.title = title; btn.disabled = !!disabled;
+      btn.addEventListener("click", fn);
+      top.appendChild(btn);
+    };
+    mk("↑", "上移", () => { [noticeBlocks[idx-1], noticeBlocks[idx]] = [noticeBlocks[idx], noticeBlocks[idx-1]]; saveNoticeBlocks(); renderNoticeBlocks(); }, idx === 0);
+    mk("↓", "下移", () => { [noticeBlocks[idx+1], noticeBlocks[idx]] = [noticeBlocks[idx], noticeBlocks[idx+1]]; saveNoticeBlocks(); renderNoticeBlocks(); }, idx === noticeBlocks.length - 1);
+    mk("✕", "刪除", () => { noticeBlocks.splice(idx, 1); if(noticeBlocks.length === 0) noticeBlocks.push({type:"p", text:"", checked:false, sameLine:false}); saveNoticeBlocks(); renderNoticeBlocks(); }, false);
+    box.appendChild(top);
+
+    let field;
+    if(b.type === "p"){
+      field = document.createElement("textarea");
+      field.rows = 4;
+    }else{
+      field = document.createElement("input");
+      field.type = "text";
+    }
+    field.value = b.text;
+    field.placeholder = b.type === "c" ? "例如：作文一篇" : (b.type === "h" ? "例如：安親班完成項目：" : "請輸入通知內容");
+    field.addEventListener("input", () => { b.text = field.value; saveNoticeBlocks(); renderNoticePreview(); });
+    box.appendChild(field);
+
+    if(b.type === "c"){
+      const opts = document.createElement("div");
+      opts.className = "nb-opts";
+      const mkOpt = (text, prop, disabled) => {
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox"; cb.checked = !!b[prop]; cb.disabled = !!disabled;
+        cb.addEventListener("change", () => { b[prop] = cb.checked; saveNoticeBlocks(); renderNoticePreview(); });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + text));
+        opts.appendChild(lab);
+      };
+      mkOpt("預先打勾（☒）", "checked", false);
+      const prevIsC = idx > 0 && noticeBlocks[idx-1].type === "c";
+      mkOpt("跟上一項排在同一行", "sameLine", !prevIsC);
+      box.appendChild(opts);
+    }
+    wrap.appendChild(box);
+  });
+  renderNoticePreview();
+}
+
+document.querySelectorAll("[data-notice-preset]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if(!confirm("這會取代目前輸入的內容，確定要換成「" + btn.textContent + "」嗎？")) return;
+    noticeBlocks = noticeClone(NOTICE_PRESETS[btn.dataset.noticePreset]);
+    noticeBlocks = noticeNormalize(noticeBlocks) || [{type:"p", text:"", checked:false, sameLine:false}];
+    saveNoticeBlocks();
+    renderNoticeBlocks();
+  });
+});
+function addNoticeBlock(type){
+  noticeBlocks.push({type, text:"", checked:false, sameLine:false});
+  saveNoticeBlocks();
+  renderNoticeBlocks();
+  const boxes = document.querySelectorAll("#noticeBlocks .nb");
+  const last = boxes[boxes.length - 1];
+  if(last){ const f = last.querySelector("textarea, input[type=text]"); if(f) f.focus(); }
+}
+document.getElementById("addNoticeP").addEventListener("click", () => addNoticeBlock("p"));
+document.getElementById("addNoticeH").addEventListener("click", () => addNoticeBlock("h"));
+document.getElementById("addNoticeC").addEventListener("click", () => addNoticeBlock("c"));
+
+document.getElementById("noticeGenerateBtn").addEventListener("click", async () => {
+  const status = document.getElementById("noticeStatus");
+  const genBtn = document.getElementById("noticeGenerateBtn");
+  status.style.display = "none";
+  status.className = "";
+  genBtn.disabled = true;
+  genBtn.textContent = "產生中…";
+  try{
+    const {zip, rows} = await generateNoticeDocx(noticeBlocks);
+    const blob = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+    const t = new Date();
+    const fname = `通知單_${t.getFullYear()}${String(t.getMonth()+1).padStart(2,"0")}${String(t.getDate()).padStart(2,"0")}.docx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    status.style.display = "block";
+    status.textContent = `已下載到手機「下載」資料夾：通知單，一頁共 ${rows * 2} 張小條。`;
+  }catch(err){
+    status.style.display = "block";
+    status.className = "error";
+    status.textContent = "產生失敗：" + err.message;
+  }finally{
+    genBtn.disabled = false;
+    genBtn.textContent = "產生並下載通知單 (.docx)";
+  }
+});
+renderNoticeBlocks();
 
 /* ---------- 底部導覽切換 ---------- */
 document.querySelectorAll(".tabbar button").forEach(btn=>{
