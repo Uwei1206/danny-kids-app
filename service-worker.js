@@ -8,7 +8,7 @@
 // 每次發布新版本，請把下面這個版本號 +1，否則手機上快取的舊版本
 // 不會自動更新。
 
-const CACHE_VERSION = "danny-kids-v7";
+const CACHE_VERSION = "danny-kids-v8";
 const APP_SHELL = [
   "./",
   "./index.html",

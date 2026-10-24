@@ -3282,10 +3282,20 @@ function noticeBuildParagraphs(blocks){
   return paras;
 }
 
-// 估算版面：中日文字／全形符號約12pt寬，英數字約7pt（保守估），一行可用寬度約252pt。
-const NOTICE_LINE_WIDTH_PT = 252;
-const NOTICE_LINE_HEIGHT_TW = 400;      // 一行約20pt（含保守餘裕，實測與原範本每頁列數一致）
-const NOTICE_PAGE_USABLE_TW = 16838 - 567*2 - 450; // A4高度－上下邊界－表格後面那個空白段落
+// 版面估算與「固定行高」：
+// 手機版Word/WPS的預設行距、段落間距比電腦版大，如果只靠軟體預設值，同一份文件在
+// 不同裝置會長得不一樣（手機會多出一頁）。所以每個段落都明確指定「固定行高」
+// （lineRule="exact"）且段落前後間距為0，任何裝置的行高都一樣，再依內容算出：
+//   最多能放幾列（R）＋ 這個列數下最舒適的行高（pitch），整份剛好控制在一頁內。
+// 文字換行是用字寬估算：中日文字／全形符號12pt、英數字約7pt（保守），一行可用寬度
+// 約246pt（實際約258pt，留一點餘裕）。另外每張小條多預留1行當保險。
+const NOTICE_LINE_WIDTH_PT = 246;
+const NOTICE_PITCH_MIN_TW = 380;   // 行高下限 19pt（內容多時優先減少列數，不壓縮行高）
+const NOTICE_PITCH_MAX_TW = 400;   // 行高上限 20pt
+const NOTICE_PITCH_FLOOR_TW = 300; // 內容極長、只剩1列時的最小行高 15pt
+const NOTICE_ROW_OVERHEAD_TW = 20; // 每列的框線高度
+const NOTICE_TRAILING_P_TW = 100;  // 表格後面那個必須存在的空白段落（也設成固定高度）
+const NOTICE_PAGE_USABLE_TW = 16838 - 567*2 - NOTICE_TRAILING_P_TW;
 function noticeCharWidth(ch){
   const c = ch.codePointAt(0);
   if(c < 0x80){ return ch === " " ? 3.5 : 7; }
@@ -3311,9 +3321,16 @@ function noticeEstimate(blocks){
   const paras = noticeBuildParagraphs(blocks);
   let lines = 2; // 固定開頭＋固定結尾
   for(const p of paras) lines += noticeCountLines(noticeParagraphText(p));
-  const slipTw = lines * NOTICE_LINE_HEIGHT_TW;
-  const rows = Math.max(1, Math.floor(NOTICE_PAGE_USABLE_TW / slipTw));
-  return {paras, lines, rows};
+  const fitLines = lines + 1; // 保險：多預留1行
+  let rows = Math.floor(NOTICE_PAGE_USABLE_TW / (fitLines * NOTICE_PITCH_MIN_TW + NOTICE_ROW_OVERHEAD_TW));
+  let tooLong = false;
+  if(rows < 1){
+    rows = 1;
+    tooLong = fitLines * NOTICE_PITCH_FLOOR_TW + NOTICE_ROW_OVERHEAD_TW > NOTICE_PAGE_USABLE_TW;
+  }
+  const room = (NOTICE_PAGE_USABLE_TW / rows - NOTICE_ROW_OVERHEAD_TW) / fitLines;
+  const pitch = Math.max(NOTICE_PITCH_FLOOR_TW, Math.min(NOTICE_PITCH_MAX_TW, Math.floor(room / 10) * 10));
+  return {paras, lines, rows, pitch, tooLong};
 }
 
 function noticeRunXml(text, opt){
@@ -3324,7 +3341,10 @@ function noticeRunXml(text, opt){
   const inner = text.split("\n").map((t, i) => (i ? "<w:br/>" : "") + `<w:t xml:space="preserve">${escapeXml(t)}</w:t>`).join("");
   return `<w:r>${rpr}${inner}</w:r>`;
 }
-function noticeParagraphXml(para){
+function noticeSpacingXml(pitch){
+  return `<w:spacing w:before="0" w:after="0" w:line="${pitch}" w:lineRule="exact"/>`;
+}
+function noticeParagraphXml(para, pitch){
   let runs = "";
   if(para.kind === "c"){
     para.items.forEach((it, i) => {
@@ -3334,7 +3354,7 @@ function noticeParagraphXml(para){
   }else{
     runs = para.text ? noticeRunXml(para.text, {bold: para.kind === "h"}) : "";
   }
-  return `<w:p><w:pPr><w:overflowPunct w:val="0"/><w:snapToGrid w:val="0"/><w:jc w:val="both"/></w:pPr>${runs}</w:p>`;
+  return `<w:p><w:pPr><w:overflowPunct w:val="0"/><w:snapToGrid w:val="0"/>${noticeSpacingXml(pitch)}<w:jc w:val="both"/></w:pPr>${runs}</w:p>`;
 }
 
 async function generateNoticeDocx(blocks){
@@ -3358,15 +3378,19 @@ async function generateNoticeDocx(blocks){
   const tcPr = (firstCell[0].match(/<w:tcPr>[\s\S]*?<\/w:tcPr>/) || [""])[0];
   const cellParas = firstCell[0].match(/<w:p [\s\S]*?<\/w:p>/g) || [];
   if(cellParas.length < 2) throw new Error("範本結構與預期不符（找不到固定的開頭/結尾段落），請回報這個訊息。");
-  const headerP = cellParas[0];
-  const footerP = cellParas[cellParas.length - 1];
+  // 固定的開頭/結尾段落也一併套用固定行高與零間距，跟中間內容一致
+  const withSpacing = (pXml) => pXml.replace(/<w:snapToGrid w:val="0"\/>/, m => m + noticeSpacingXml(est.pitch));
+  const headerP = withSpacing(cellParas[0]);
+  const footerP = withSpacing(cellParas[cellParas.length - 1]);
 
-  const cell = `<w:tc>${tcPr}${headerP}${est.paras.map(noticeParagraphXml).join("")}${footerP}</w:tc>`;
+  const cell = `<w:tc>${tcPr}${headerP}${est.paras.map(pa => noticeParagraphXml(pa, est.pitch)).join("")}${footerP}</w:tc>`;
   // cantSplit：萬一估算的列數偏多，整張小條會移到下一頁，不會被從中間切開
   const row = `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell}${cell}</w:tr>`;
   const tbl = `<w:tbl>${head[1]}${head[2]}${row.repeat(est.rows)}</w:tbl>`;
-  zip.file("word/document.xml", xml.slice(0, tblStart) + tbl + xml.slice(tblEnd + "</w:tbl>".length));
-  return {zip, rows: est.rows};
+  // 表格後面那個空白段落一定要存在（Word規定），把它縮成固定的小高度，不佔頁面空間
+  const afterTbl = xml.slice(tblEnd + "</w:tbl>".length).replace(/<w:spacing w:after="0"\/>/, `<w:spacing w:before="0" w:after="0" w:line="${NOTICE_TRAILING_P_TW}" w:lineRule="exact"/>`);
+  zip.file("word/document.xml", xml.slice(0, tblStart) + tbl + afterTbl);
+  return {zip, rows: est.rows, pitch: est.pitch, tooLong: est.tooLong};
 }
 
 /* ----- 輸入畫面 ----- */
@@ -3382,7 +3406,9 @@ function renderNoticePreview(){
     else add(para.kind === "h" ? "sp-bold" : "", para.text);
   }
   add("sp-right", "丹尼中和分校 敬上");
-  hint.textContent = `產生後一頁會排滿 ${est.rows} 列、共 ${est.rows * 2} 張小條（以預估計算，實際以手機上的 Word/WPS 開啟為準）。`;
+  hint.textContent = est.tooLong
+    ? "內容太長，一張小條可能放不下一頁，請縮短內容。"
+    : `一頁會排 ${est.rows} 列、共 ${est.rows * 2} 張小條，行距會自動調整成剛好一頁放得下。`;
 }
 
 function renderNoticeBlocks(){
@@ -3473,7 +3499,7 @@ document.getElementById("noticeGenerateBtn").addEventListener("click", async () 
   genBtn.disabled = true;
   genBtn.textContent = "產生中…";
   try{
-    const {zip, rows} = await generateNoticeDocx(noticeBlocks);
+    const {zip, rows, tooLong} = await generateNoticeDocx(noticeBlocks);
     const blob = await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
     const t = new Date();
     const fname = `通知單_${t.getFullYear()}${String(t.getMonth()+1).padStart(2,"0")}${String(t.getDate()).padStart(2,"0")}.docx`;
@@ -3482,7 +3508,7 @@ document.getElementById("noticeGenerateBtn").addEventListener("click", async () 
     a.href = url; a.download = fname;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     status.style.display = "block";
-    status.textContent = `已下載到手機「下載」資料夾：通知單，一頁共 ${rows * 2} 張小條。`;
+    status.textContent = `已下載到手機「下載」資料夾：通知單，一頁共 ${rows * 2} 張小條。` + (tooLong ? "（內容太長，可能會超出一頁，建議縮短內容。）" : "");
   }catch(err){
     status.style.display = "block";
     status.className = "error";
