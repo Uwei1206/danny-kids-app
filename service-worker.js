@@ -8,7 +8,7 @@
 // 每次發布新版本，請把下面這個版本號 +1，否則手機上快取的舊版本
 // 不會自動更新。
 
-const CACHE_VERSION = "danny-kids-v8";
+const CACHE_VERSION = "danny-kids-v9";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -34,7 +34,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_VERSION);
-      await cache.addAll(APP_SHELL);
+      // cache:"reload"：略過瀏覽器自己的HTTP快取，確保抓到的是伺服器上最新的檔案
+      await cache.addAll(APP_SHELL.map((u) => new Request(u, { cache: "reload" })));
       // CDN 資源個別抓取，單一檔案失敗不影響整體安裝
       await Promise.all(
         CDN_ASSETS.map(async (url) => {
@@ -64,39 +65,60 @@ self.addEventListener("activate", (event) => {
 });
 
 // 策略：
-// - App 本體與範本檔案（同網域）：cache-first，有快取先用快取，
-//   同時在背景偷偷更新快取，下次開啟就是新版本。
-// - 其他（例如 CDN）：cache-first，但找不到快取時才走網路。
+// - App 本體與範本檔案（同網域）：「網路優先」。有網路就一定抓最新版（並更新快取），
+//   網路很慢（超過4秒）或沒有網路時才改用手機裡存的快取版本，離線也能用。
+//   （原本是「快取優先」，會一直先給舊版，更新後要開兩次才會換成新版，
+//   造成老師手機上跑的不是最新版。）
+// - 其他（例如 CDN 的 JSZip）：快取優先，找不到才走網路。
+async function networkFirst(req){
+  const cache = await caches.open(CACHE_VERSION);
+  const net = fetch(req.url, { cache: "no-cache" }).then((resp) => {
+    if (resp && resp.ok) cache.put(req, resp.clone());
+    return resp;
+  });
+  net.catch(() => {}); // 避免逾時之後才失敗造成未處理的錯誤
+  try {
+    return await Promise.race([
+      net,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000))
+    ]);
+  } catch (e) {
+    const cached = (await cache.match(req)) || (await caches.match(req));
+    if (cached) return cached;
+    if (req.mode === "navigate") {
+      const home = await caches.match("./index.html");
+      if (home) return home;
+    }
+    try { return await net; } catch (_) {
+      return new Response("離線狀態，且找不到快取內容", { status: 503 });
+    }
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  const url = new URL(req.url);
+
+  if (url.origin === self.location.origin) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
 
   event.respondWith(
     (async () => {
       const cached = await caches.match(req);
-      const networkFetch = fetch(req)
-        .then((resp) => {
-          if (resp && resp.ok) {
-            const copy = resp.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-          }
-          return resp;
-        })
-        .catch(() => null);
-
-      if (cached) {
-        // 有快取：立刻回傳快取內容，背景更新快取（不等待）
-        networkFetch;
-        return cached;
+      if (cached) return cached;
+      try {
+        const resp = await fetch(req);
+        if (resp && resp.ok) {
+          const copy = resp.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+        }
+        return resp;
+      } catch (e) {
+        return new Response("離線狀態，且找不到快取內容", { status: 503 });
       }
-      // 沒快取：等網路回應；網路也失敗的話，若是在要求頁面本身，
-      // 退回 index.html，避免顯示瀏覽器預設的離線錯誤頁。
-      const networkResp = await networkFetch;
-      if (networkResp) return networkResp;
-      if (req.mode === "navigate") {
-        return caches.match("./index.html");
-      }
-      return new Response("離線狀態，且找不到快取內容", { status: 503 });
     })()
   );
 });

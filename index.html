@@ -440,7 +440,7 @@
 <body>
 
 <header>
-  <div class="tag">丹尼互動美語</div>
+  <div class="tag">丹尼互動美語 · v9</div>
   <h1 id="pageTitle">學生名單</h1>
 </header>
 
@@ -3295,7 +3295,8 @@ const NOTICE_PITCH_MAX_TW = 400;   // 行高上限 20pt
 const NOTICE_PITCH_FLOOR_TW = 300; // 內容極長、只剩1列時的最小行高 15pt
 const NOTICE_ROW_OVERHEAD_TW = 20; // 每列的框線高度
 const NOTICE_TRAILING_P_TW = 100;  // 表格後面那個必須存在的空白段落（也設成固定高度）
-const NOTICE_PAGE_USABLE_TW = 16838 - 567*2 - NOTICE_TRAILING_P_TW;
+const NOTICE_RENDER_RESERVE_TW = 300; // 不同軟體對「表格後空白段落」高度處理不同，再多留一點
+const NOTICE_PAGE_USABLE_TW = 16838 - 567*2 - NOTICE_TRAILING_P_TW - NOTICE_RENDER_RESERVE_TW;
 function noticeCharWidth(ch){
   const c = ch.codePointAt(0);
   if(c < 0x80){ return ch === " " ? 3.5 : 7; }
@@ -3385,7 +3386,10 @@ async function generateNoticeDocx(blocks){
 
   const cell = `<w:tc>${tcPr}${headerP}${est.paras.map(pa => noticeParagraphXml(pa, est.pitch)).join("")}${footerP}</w:tc>`;
   // cantSplit：萬一估算的列數偏多，整張小條會移到下一頁，不會被從中間切開
-  const row = `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell}${cell}</w:tr>`;
+  // 列高固定（exact）：整頁高度平均分給每一列，所以不管手機/電腦怎麼排行距，
+  // 整個表格的高度都固定、不可能超出一頁（內容已預留1行餘裕）。
+  const rowH = Math.floor(NOTICE_PAGE_USABLE_TW / est.rows) - 40;
+  const row = `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="${rowH}" w:hRule="exact"/></w:trPr>${cell}${cell}</w:tr>`;
   const tbl = `<w:tbl>${head[1]}${head[2]}${row.repeat(est.rows)}</w:tbl>`;
   // 表格後面那個空白段落一定要存在（Word規定），把它縮成固定的小高度，不佔頁面空間
   const afterTbl = xml.slice(tblEnd + "</w:tbl>".length).replace(/<w:spacing w:after="0"\/>/, `<w:spacing w:before="0" w:after="0" w:line="${NOTICE_TRAILING_P_TW}" w:lineRule="exact"/>`);
